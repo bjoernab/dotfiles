@@ -1,0 +1,229 @@
+(deflisten current_application :initial "Desktop"
+  `/home/vile/.config/eww/scripts/current-application.sh`)
+
+(defpoll speaker_state :interval "2s"
+  `bash -lc 'muted=$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | awk "{print \$2}"); if [ "$muted" = "yes" ]; then echo muted; else echo normal; fi'`)
+
+(defpoll speaker_icon :interval "2s"
+  `bash -lc 'muted=$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | awk "{print \$2}"); vol=$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | awk -F"/" "NR==1{gsub(/ /,\"\",\$2);gsub(/%/,\"\",\$2);print \$2}"); if [ -z "$vol" ]; then vol=0; fi; if [ "$muted" = "yes" ] || [ "$vol" -eq 0 ]; then echo "󰝟"; elif [ "$vol" -lt 35 ]; then echo "󰕿"; elif [ "$vol" -lt 70 ]; then echo "󰖀"; else echo "󰕾"; fi'`)
+
+(defpoll speaker_percent :interval "2s" :initial "0"
+  `bash -lc 'vol=$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | awk -F"/" "NR==1{gsub(/ /,\"\",\$2);gsub(/%/,\"\",\$2);print int(\$2)}"); if [ -z "$vol" ]; then vol=0; fi; if [ "$vol" -lt 0 ]; then vol=0; fi; if [ "$vol" -gt 100 ]; then vol=100; fi; printf "%s" "$vol"'`)
+
+(defpoll microphone_state :interval "2s"
+  `bash -lc 'muted=$(pactl get-source-mute @DEFAULT_SOURCE@ 2>/dev/null | awk "{print \$2}"); if [ "$muted" = "yes" ]; then echo muted; else echo normal; fi'`)
+
+(defpoll microphone_percent :interval "2s" :initial "0"
+  `bash -lc 'vol=$(pactl get-source-volume @DEFAULT_SOURCE@ 2>/dev/null | awk -F"/" "NR==1{gsub(/ /,\"\",\$2);gsub(/%/,\"\",\$2);print int(\$2)}"); if [ -z "$vol" ]; then vol=0; fi; if [ "$vol" -lt 0 ]; then vol=0; fi; if [ "$vol" -gt 100 ]; then vol=100; fi; printf "%s" "$vol"'`)
+
+(defpoll open_app_rows :interval "2s" :initial "[]"
+  `/home/vile/.config/eww/scripts/open-apps-json.sh`)
+
+(defpoll bluetooth_state :interval "5s"
+  `rfkill --output TYPE,SOFT,HARD 2>/dev/null | awk '$1 == "bluetooth" { if ($2 == "unblocked" && $3 == "unblocked") print "on"; else print "off"; found=1; exit } END { if (!found) print "off" }'`)
+
+(defpoll network_state :interval "5s"
+  `state=$(nmcli -t -f STATE g 2>/dev/null); case "$state" in connected*) echo online ;; connecting*) echo connecting ;; *) echo offline ;; esac`)
+
+(defpoll network_icon :interval "5s"
+  `state=$(nmcli -t -f STATE g 2>/dev/null); case "$state" in connected*) echo "󰤨" ;; connecting*) echo "󰤥" ;; *) echo "󰤭" ;; esac`)
+
+(defpoll current_time :interval "15s"
+  `date "+%H:%M"`)
+
+(defpoll current_identity :interval "30m" :initial "vile@archlinux"
+  `user="$USER"; if [ -z "$user" ]; then user=$(whoami 2>/dev/null || printf 'vile'); fi; printf '%s@%s' "$user" "$(hostname -s 2>/dev/null || printf 'archlinux')"` )
+
+(defwidget icon-chip [class icon]
+  (box :class { "icon-chip " + class } :valign "center"
+    (label :class "status-icon" :text icon)))
+
+(defwidget arch-trigger []
+  (button :class "arch-button"
+    :valign "center"
+    :onclick "bash -lc 'if eww active-windows | grep -q \"^arch_popup:\"; then eww close arch_popup; else eww close tray_popup >/dev/null 2>&1; eww close speaker_popup >/dev/null 2>&1; eww open arch_popup; fi'"
+    (label :class "arch-icon" :text "")))
+
+(defwidget tray-trigger []
+  (button :class "tray-trigger"
+    :valign "center"
+    :onclick "bash -lc 'if eww active-windows | grep -q \"^tray_popup:\"; then eww close tray_popup; else eww close arch_popup >/dev/null 2>&1; eww close speaker_popup >/dev/null 2>&1; eww open tray_popup; fi'"
+    (label :class "status-icon tray-icon" :text "")))
+
+(defwidget speaker-trigger []
+  (button :class { "speaker-trigger " + speaker_state }
+    :valign "center"
+    :onclick "bash -lc 'if eww active-windows | grep -q \"^speaker_popup:\"; then eww close speaker_popup; else eww close tray_popup >/dev/null 2>&1; eww close arch_popup >/dev/null 2>&1; eww open speaker_popup; fi'"
+    (label :class "status-icon speaker-icon" :text speaker_icon)))
+
+(defwidget bluetooth-chip []
+  (box :class { "icon-chip bluetooth-chip " + bluetooth_state } :valign "center"
+    (overlay :class "bluetooth-overlay" :halign "center" :valign "center"
+      (label :class "status-icon bluetooth-icon" :text "󰂯")
+      (label :class { "bluetooth-slash " + bluetooth_state } :text "╱"))))
+
+(defwidget clock-chip []
+  (box :class "clock-chip" :valign "center"
+    (label :class "clock" :text current_time)))
+
+(defwidget open-app-entry [icon workspace address]
+  (button :class "open-app-entry"
+    :valign "center"
+    :onclick { "bash -lc 'hyprctl dispatch workspace " + workspace + " >/dev/null 2>&1; sleep 0.05; hyprctl dispatch focuswindow address:" + address + " >/dev/null 2>&1; eww close tray_popup >/dev/null 2>&1'" }
+    (label :class "open-app-icon" :text icon)))
+
+(defwidget tray-popup-card []
+  (eventbox :onclick "true"
+    (box :class "tray-popup-card"
+      (box :class "open-app-list" :orientation "vertical" :spacing 8
+        (for row in open_app_rows
+          (box :class "open-app-row" :spacing 8
+            (for app in row
+              (open-app-entry :icon { app.icon } :workspace { app.workspace } :address { app.address }))))))))
+
+(defwidget tray-popup-overlay []
+  (eventbox :onclick "eww close tray_popup"
+    (box :class "tray-popup-overlay" :hexpand true :vexpand true
+      (box :class "tray-popup-anchor" :hexpand true :vexpand true :halign "end" :valign "start"
+        (tray-popup-card)))))
+
+(defwidget audio-link-button [label action]
+  (button :class "audio-link-button"
+    :onclick action
+    (box :class "audio-link-inner" :spacing 6 :valign "center"
+      (label :class "audio-link-icon" :text "󰓃")
+      (label :class "audio-link-label" :text label))))
+
+(defwidget audio-toggle-button [class label action]
+  (button :class { "audio-toggle-button " + class }
+    :onclick action
+    (label :class "audio-toggle-label" :text label)))
+
+(defwidget audio-control-row [class icon title subtitle percent toggle_label toggle_action change_action]
+  (box :class { "audio-control-row " + class } :orientation "vertical" :spacing 7
+    (box :class "audio-row-header" :spacing 8 :valign "center"
+      (label :class "audio-row-icon" :text icon)
+      (box :class "audio-row-copy" :orientation "vertical" :spacing 1 :hexpand true
+        (label :class "audio-row-title" :text title)
+        (label :class "audio-row-subtitle" :text subtitle))
+      (label :class "audio-row-level" :text { percent + "%" }))
+    (box :class "audio-row-controls" :spacing 8 :valign "center"
+      (scale :class "audio-slider"
+        :hexpand true
+        :draw-value false
+        :round-digits 0
+        :min 0
+        :max 100
+        :value percent
+        :onchange change_action)
+      (audio-toggle-button :class class :label toggle_label :action toggle_action))))
+
+(defwidget speaker-popup-card []
+  (eventbox :onclick "true"
+    (box :class "speaker-popup-card" :orientation "vertical" :spacing 6
+      (box :class "speaker-popup-header" :spacing 8 :valign "center"
+        (label :class "speaker-popup-header-icon" :text speaker_icon)
+        (box :class "speaker-popup-header-copy" :orientation "vertical" :spacing 1 :hexpand true
+          (label :class "speaker-popup-title" :text "Audio")
+          (label :class "speaker-popup-subtitle" :text "Output and microphone controls"))
+        (audio-link-button
+          :label "Open Mixer"
+          :action "bash -lc 'pavucontrol >/dev/null 2>&1 & eww close speaker_popup'"))
+      (audio-control-row
+        :class { "output-row " + speaker_state }
+        :icon speaker_icon
+        :title "Output"
+        :subtitle "Default sink"
+        :percent speaker_percent
+        :toggle_label { speaker_state == "muted" ? "Unmute" : "Mute" }
+        :toggle_action "pactl set-sink-mute @DEFAULT_SINK@ toggle"
+        :change_action "pactl set-sink-volume @DEFAULT_SINK@ {}%")
+      (audio-control-row
+        :class { "input-row " + microphone_state }
+        :icon "󰍬"
+        :title "Input"
+        :subtitle "Default microphone"
+        :percent microphone_percent
+        :toggle_label { microphone_state == "muted" ? "Unmute" : "Mute" }
+        :toggle_action "pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+        :change_action "pactl set-source-volume @DEFAULT_SOURCE@ {}%"))))
+
+(defwidget speaker-popup-overlay []
+  (eventbox :onclick "eww close speaker_popup"
+    (box :class "speaker-popup-overlay" :hexpand true :vexpand true
+      (box :class "speaker-popup-anchor" :hexpand true :vexpand true :halign "end" :valign "start"
+        (speaker-popup-card)))))
+
+(defwidget arch-popup-header []
+  (box :class "arch-popup-header" :spacing 5 :valign "center"
+    (box :class "arch-popup-avatar" :halign "center" :valign "center"
+      (label :class "arch-popup-avatar-icon" :text ""))
+    (label :class "arch-popup-user" :text current_identity)))
+
+(defwidget arch-popup-card []
+  (eventbox :onclick "true"
+    (box :class "arch-popup-card"
+      (arch-popup-header))))
+
+(defwidget arch-popup-overlay []
+  (eventbox :onclick "eww close arch_popup"
+    (box :class "arch-popup-overlay" :hexpand true :vexpand true
+      (box :class "arch-popup-anchor" :hexpand true :vexpand true :halign "start" :valign "start"
+        (arch-popup-card)))))
+
+(defwidget status-cluster []
+  (box :class "status-cluster" :spacing 5 :halign "end" :valign "center"
+    (tray-trigger)
+    (speaker-trigger)
+    (bluetooth-chip)
+    (icon-chip :class { "network-chip " + network_state } :icon network_icon)
+    (icon-chip :class "lock-chip" :icon "󰌾")
+    (clock-chip)))
+
+(defwidget minimal_bar []
+  (box :class "bar-shell" :hexpand true :vexpand true :valign "start"
+    (centerbox :class "bar-surface"
+      (box :class "bar-side bar-left" :hexpand true :halign "start" :valign "center"
+        (arch-trigger))
+      (box :class "bar-center" :halign "center" :valign "center"
+        (box :class "current-app-wrap" :halign "center" :valign "center"
+          (label :class "current-app" :text current_application)))
+      (box :class "bar-side bar-right" :hexpand true :halign "end" :valign "center"
+        (status-cluster)))))
+
+(defwindow bar
+  :monitor 0
+  :windowtype "dock"
+  :stacking "fg"
+  :exclusive true
+  :focusable false
+  :geometry (geometry :x "0%" :y "0%" :width "100%" :height "38px" :anchor "top center")
+  :reserve (struts :distance "38px" :side "top")
+  (minimal_bar))
+
+(defwindow tray_popup
+  :monitor 0
+  :windowtype "normal"
+  :stacking "fg"
+  :focusable true
+  :exclusive false
+  :geometry (geometry :x "0%" :y "34px" :width "100%" :height "100%" :anchor "top left")
+  (tray-popup-overlay))
+
+(defwindow speaker_popup
+  :monitor 0
+  :windowtype "normal"
+  :stacking "fg"
+  :focusable true
+  :exclusive false
+  :geometry (geometry :x "0%" :y "34px" :width "100%" :height "100%" :anchor "top left")
+  (speaker-popup-overlay))
+
+(defwindow arch_popup
+  :monitor 0
+  :windowtype "normal"
+  :stacking "fg"
+  :focusable true
+  :exclusive false
+  :geometry (geometry :x "0%" :y "34px" :width "100%" :height "100%" :anchor "top left")
+  (arch-popup-overlay))

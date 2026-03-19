@@ -1,0 +1,6 @@
+# ~/.config/mako/screenshare
+# Included from ~/.config/mako/config.
+# detect_ss.sh uses the "screenshare" mode as a toggle for masking logic.
+# The masked notification itself is re-sent with app-name "mako-screenshare-mask".
+# No visual overrides are needed here: the masked copy should look like a
+# normal notification, just with starred text and the original icon.

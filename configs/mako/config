@@ -1,0 +1,56 @@
+# ~/.config/mako/config
+
+### --- Core Appearance ---
+
+font=FiraCode Nerd Font, Twemoji 10
+
+background-color=#0b0d10e6
+text-color=#e6e8ebff
+border-color=#2a2f38ff
+
+border-size=1
+border-radius=3
+
+padding=6
+margin=3
+
+width=360
+height=44
+
+icons=1
+max-icon-size=18
+
+markup=0
+format=%s  %b
+
+layer=overlay
+anchor=top-right
+
+default-timeout=4000
+ignore-timeout=0
+include=~/.config/mako/screenshare
+
+### --- Density / Stacking ---
+# Tight spacing for a slim, row-like stack.
+
+### --- Urgency Styling ---
+
+[urgency=low]
+border-color=#21262eff
+default-timeout=3000
+
+[urgency=normal]
+border-color=#2a2f38ff
+default-timeout=4000
+
+[urgency=critical]
+border-size=2
+border-color=#ff3b3bff
+background-color=#1a0d0fe6
+text-color=#ffecec
+default-timeout=0
+
+### --- App-specific example ---
+# Make Spotify notifications shorter
+[app-name=Spotify]
+default-timeout=2500

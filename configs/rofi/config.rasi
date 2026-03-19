@@ -1,0 +1,276 @@
+configuration {
+    modes: "drun,run,window,ssh,combi";
+    combi-modes: "drun,window,run";
+    combi-display-format: "{mode}  {text}";
+    combi-hide-mode-prefix: false;
+
+    font: "FiraCode Nerd Font 11";
+    terminal: "kitty";
+    show-icons: true;
+    icon-theme: "Papirus-Dark";
+
+    display-drun: "apps";
+    display-run: "run";
+    display-window: "windows";
+    display-ssh: "ssh";
+    display-combi: "mix";
+
+    drun-match-fields: "name,generic,exec,categories,keywords";
+    drun-display-format: "{name}";
+    drun-show-actions: true;
+    drun-use-desktop-cache: true;
+    drun-reload-desktop-cache: false;
+
+    disable-history: false;
+    max-history-size: 200;
+    sort: true;
+    sorting-method: "fzf";
+    case-smart: true;
+    normalize-match: true;
+    matching: "fuzzy";
+    tokenize: true;
+    cycle: true;
+    sidebar-mode: true;
+    hover-select: true;
+    click-to-exit: true;
+    parse-known-hosts: true;
+    window-thumbnail: false;
+
+    kb-mode-next: "Control+Tab,Shift+Right";
+    kb-mode-previous: "Control+ISO_Left_Tab,Shift+Left";
+    kb-row-up: "Up,Alt+k,Control+p";
+    kb-row-down: "Down,Alt+j,Control+n";
+    kb-accept-entry: "Control+m,Return,KP_Enter";
+    kb-cancel: "Escape,Control+g";
+    kb-remove-to-sol: "Control+u";
+    kb-remove-to-eol: "Control+k";
+
+    timeout {
+        action: "kb-cancel";
+        delay: 0;
+    }
+
+    filebrowser {
+        directories-first: true;
+        sorting-method: "name";
+    }
+}
+
+* {
+    font: "FiraCode Nerd Font 11";
+
+    bg0: rgba (23, 26, 41, 92%);
+    bg1: rgba (30, 32, 51, 95%);
+    bg2: rgba (43, 47, 75, 100%);
+    bg3: rgba (74, 79, 120, 100%);
+    fg0: rgba (248, 248, 242, 100%);
+    fg1: rgba (216, 220, 255, 96%);
+    accent: rgba (169, 180, 255, 100%);
+    accent-soft: rgba (142, 168, 255, 100%);
+    warn: rgba (255, 210, 122, 100%);
+    urgent: rgba (255, 116, 128, 100%);
+    border-col: rgba (146, 154, 255, 100%);
+
+    background: transparent;
+    foreground: var(fg0);
+    separatorcolor: var(border-col);
+
+    normal-background: transparent;
+    normal-foreground: var(fg1);
+    alternate-normal-background: rgba (30, 32, 51, 45%);
+    alternate-normal-foreground: var(fg1);
+    selected-normal-background: var(bg3);
+    selected-normal-foreground: var(fg0);
+
+    active-background: transparent;
+    active-foreground: var(accent-soft);
+    selected-active-background: var(accent);
+    selected-active-foreground: var(bg1);
+
+    urgent-background: transparent;
+    urgent-foreground: var(urgent);
+    selected-urgent-background: var(urgent);
+    selected-urgent-foreground: var(bg1);
+
+    spacing: 10;
+}
+
+window {
+    anchor: center;
+    location: center;
+    width: 46%;
+    border: 1px;
+    border-radius: 14px;
+    border-color: var(border-col);
+    background-color: var(bg0);
+    padding: 16px;
+    transparency: "real";
+}
+
+mainbox {
+    spacing: 12;
+    background-color: transparent;
+    children: [ "inputbar", "listview", "message", "sidebar" ];
+}
+
+inputbar {
+    children: [ "prompt", "entry", "overlay", "case-indicator" ];
+    spacing: 10px;
+    padding: 10px 12px;
+    border: 1px;
+    border-radius: 11px;
+    border-color: var(bg3);
+    background-color: var(bg1);
+    text-color: var(fg0);
+}
+
+prompt {
+    str: "search";
+    text-color: var(accent);
+    background-color: transparent;
+    padding: 0px 6px 0px 0px;
+    font: "JetBrains Mono ExtraBold 11";
+}
+
+entry {
+    text-color: var(fg0);
+    cursor: text;
+    expand: true;
+    placeholder: "apps, windows, commands, ssh";
+    placeholder-color: rgba (184, 206, 255, 70%);
+}
+
+overlay {
+    background-color: var(accent);
+    text-color: var(bg1);
+    padding: 1px 6px;
+    border-radius: 6px;
+}
+
+case-indicator {
+    text-color: var(accent-soft);
+    padding: 0px 4px;
+}
+
+message {
+    background-color: transparent;
+    border: 1px dash 0px 0px;
+    border-color: var(bg3);
+    padding: 6px 0px 0px;
+}
+
+textbox {
+    background-color: transparent;
+    text-color: var(fg1);
+}
+
+listview {
+    lines: 10;
+    columns: 1;
+    fixed-height: false;
+    dynamic: true;
+    cycle: true;
+    scrollbar: true;
+    layout: vertical;
+    reverse: false;
+    spacing: 8px;
+    background-color: transparent;
+    border: 0;
+    padding: 2px 0px;
+}
+
+scrollbar {
+    width: 5px;
+    border: 0;
+    handle-width: 9px;
+    padding: 0;
+    handle-color: var(accent);
+    background-color: var(bg2);
+    border-radius: 10px;
+}
+
+element {
+    padding: 8px 10px;
+    spacing: 12px;
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+    background-color: transparent;
+    text-color: var(fg1);
+}
+
+element-text {
+    text-color: inherit;
+    vertical-align: 0.5;
+    background-color: transparent;
+}
+
+element-icon {
+    size: 1.05em;
+    text-color: inherit;
+    background-color: transparent;
+}
+
+element normal.normal {
+    background-color: transparent;
+    text-color: var(fg1);
+}
+
+element alternate.normal {
+    background-color: rgba (30, 32, 51, 45%);
+    text-color: var(fg1);
+}
+
+element selected.normal {
+    background-color: var(bg3);
+    text-color: var(fg0);
+}
+
+element normal.active {
+    background-color: transparent;
+    text-color: var(accent-soft);
+}
+
+element selected.active {
+    background-color: var(accent);
+    text-color: var(bg1);
+}
+
+element normal.urgent {
+    background-color: transparent;
+    text-color: var(urgent);
+}
+
+element selected.urgent {
+    background-color: var(urgent);
+    text-color: var(bg1);
+}
+
+sidebar {
+    spacing: 8px;
+    background-color: transparent;
+    border: 0;
+}
+
+button {
+    cursor: pointer;
+    padding: 7px 12px;
+    border: 1px;
+    border-radius: 9px;
+    border-color: var(bg3);
+    background-color: var(bg1);
+    text-color: var(fg1);
+}
+
+button selected {
+    border-color: var(accent);
+    background-color: var(accent);
+    text-color: var(bg1);
+}
+
+num-filtered-rows,
+num-rows,
+textbox-num-sep {
+    text-color: var(accent-soft);
+    background-color: transparent;
+}

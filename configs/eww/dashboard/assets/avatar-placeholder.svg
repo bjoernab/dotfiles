@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Avatar placeholder">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9cbcff"/>
+      <stop offset="100%" stop-color="#79d8c7"/>
+    </linearGradient>
+    <linearGradient id="inner" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e2732"/>
+      <stop offset="100%" stop-color="#111820"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="62" fill="url(#bg)"/>
+  <circle cx="64" cy="64" r="54" fill="url(#inner)"/>
+  <text x="64" y="78" font-family="Iosevka, monospace" font-size="46" fill="#e9f1ff" text-anchor="middle">V</text>
+</svg>

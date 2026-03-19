@@ -15,17 +15,24 @@ HYPRLAND_PACKAGES=(
   wl-clipboard
   grim
   slurp
+  flameshot
+  libnotify
+  pavucontrol
+  python
+  perl
+  wvkbd
   xdg-desktop-portal
   xdg-desktop-portal-hyprland
-  polkit-kde-agent
+  polkit-gnome
   hyprpaper
   hyprlock
 )
 
 FONT_PACKAGES=(
-  noto-fonts
-  noto-fonts-emoji
-  ttf-font-awesome
+  ttf-firacode-nerd
+  ttf-jetbrains-mono
+  ttf-nerd-fonts-symbols
+  ttf-twemoji
 )
 
 APP_PACKAGES=(
@@ -244,8 +251,8 @@ preflight_checks() {
 # =========================
 
 refresh_pacman() {
-  print_info "Refreshing package databases..."
-  sudo pacman -Sy --noconfirm
+  print_info "Refreshing package databases and upgrading installed packages..."
+  sudo pacman -Syu --noconfirm
 }
 
 install_package_group() {
@@ -297,20 +304,24 @@ backup_config_dir() {
   local target="$1"
 
   if [[ -e "$target" ]]; then
-    mkdir -p "$BACKUP_DIR"
-    mv "$target" "$BACKUP_DIR/"
+    mkdir -p "$BACKUP_DIR" || return 1
+    mv "$target" "$BACKUP_DIR/" || return 1
     print_warn "Backed up $target to $BACKUP_DIR"
   fi
+
+  return 0
 }
 
 backup_home_file() {
   local target="$1"
 
   if [[ -e "$target" ]]; then
-    mkdir -p "$BACKUP_DIR"
-    mv "$target" "$BACKUP_DIR/"
+    mkdir -p "$BACKUP_DIR" || return 1
+    mv "$target" "$BACKUP_DIR/" || return 1
     print_warn "Backed up $target to $BACKUP_DIR"
   fi
+
+  return 0
 }
 
 copy_config_dir() {
@@ -318,13 +329,13 @@ copy_config_dir() {
   local target_dir="$2"
 
   if [[ ! -d "$source_dir" ]]; then
-    print_warn "Source config not found: $source_dir"
-    return 0
+    print_error "Source config not found: $source_dir"
+    return 1
   fi
 
-  backup_config_dir "$target_dir"
-  mkdir -p "$(dirname "$target_dir")"
-  cp -r "$source_dir" "$target_dir"
+  backup_config_dir "$target_dir" || return 1
+  mkdir -p "$(dirname "$target_dir")" || return 1
+  cp -a "$source_dir" "$target_dir"
 }
 
 copy_home_file() {
@@ -332,15 +343,18 @@ copy_home_file() {
   local target_file="$2"
 
   if [[ ! -f "$source_file" ]]; then
-    print_warn "Source file not found: $source_file"
-    return 0
+    print_error "Source file not found: $source_file"
+    return 1
   fi
 
-  backup_home_file "$target_file"
-  cp "$source_file" "$target_file"
+  backup_home_file "$target_file" || return 1
+  cp -a "$source_file" "$target_file"
 }
 
 deploy_configs() {
+  local rc=0
+  local copied_any=0
+
   if [[ "$COPY_CONFIGS" != "true" ]]; then
     print_info "Config deployment skipped."
     return 0
@@ -348,20 +362,69 @@ deploy_configs() {
 
   print_header "DEPLOYING CONFIGS"
 
-  mkdir -p "$HOME/.config"
+  mkdir -p "$HOME/.config" || rc=1
 
-  copy_config_dir "$REPO_DIR/configs/hypr" "$HOME/.config/hypr"
-  copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"
-  copy_config_dir "$REPO_DIR/configs/rofi" "$HOME/.config/rofi"
-  copy_config_dir "$REPO_DIR/configs/kitty" "$HOME/.config/kitty"
-  copy_config_dir "$REPO_DIR/configs/mako" "$HOME/.config/mako"
-  copy_config_dir "$REPO_DIR/configs/hyprpaper" "$HOME/.config/hyprpaper"
-  copy_config_dir "$REPO_DIR/configs/hyprlock" "$HOME/.config/hyprlock"
+  if copy_config_dir "$REPO_DIR/configs/hypr" "$HOME/.config/hypr"; then
+    copied_any=1
+  else
+    rc=1
+  fi
 
-  copy_home_file "$REPO_DIR/home/.zshrc" "$HOME/.zshrc"
-  copy_home_file "$REPO_DIR/home/.bashrc" "$HOME/.bashrc"
+  if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
+    copied_any=1
+  else
+    rc=1
+  fi
 
-  report_step_result "Deployed configuration files" "$?"
+  if copy_config_dir "$REPO_DIR/configs/rofi" "$HOME/.config/rofi"; then
+    copied_any=1
+  else
+    rc=1
+  fi
+
+  if copy_config_dir "$REPO_DIR/configs/kitty" "$HOME/.config/kitty"; then
+    copied_any=1
+  else
+    rc=1
+  fi
+
+  if copy_config_dir "$REPO_DIR/configs/mako" "$HOME/.config/mako"; then
+    copied_any=1
+  else
+    rc=1
+  fi
+
+  if copy_config_dir "$REPO_DIR/configs/hyprpaper" "$HOME/.config/hyprpaper"; then
+    copied_any=1
+  else
+    rc=1
+  fi
+
+  if copy_config_dir "$REPO_DIR/configs/hyprlock" "$HOME/.config/hyprlock"; then
+    copied_any=1
+  else
+    rc=1
+  fi
+
+  if copy_home_file "$REPO_DIR/home/.zshrc" "$HOME/.zshrc"; then
+    copied_any=1
+  else
+    rc=1
+  fi
+
+  if copy_home_file "$REPO_DIR/home/.bashrc" "$HOME/.bashrc"; then
+    copied_any=1
+  else
+    rc=1
+  fi
+
+  if [[ "$copied_any" -eq 0 ]]; then
+    print_error "No configuration sources were copied."
+    rc=1
+  fi
+
+  report_step_result "Deployed configuration files" "$rc"
+  return "$rc"
 }
 
 # =========================

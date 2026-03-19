@@ -1,0 +1,412 @@
+$fg: #f4f7ff;
+$fg-soft: rgba(236, 239, 245, 0.88);
+$fg-faint: rgba(212, 217, 226, 0.66);
+$accent: #d8dce4;
+$shadow: rgba(0, 0, 0, 0.58);
+$popup-bg: rgba(18, 20, 24, 0.97);
+$popup-border: rgba(255, 255, 255, 0.06);
+$popup-hover: rgba(255, 255, 255, 0.045);
+$popup-shadow: rgba(0, 0, 0, 0.5);
+
+* {
+  all: unset;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+window {
+  background: transparent;
+  color: $fg;
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+}
+
+.bar-shell,
+.bar-surface,
+.bar-side,
+.bar-center,
+.current-app-wrap,
+.status-cluster,
+.arch-popup-overlay,
+.arch-popup-anchor,
+.tray-popup-overlay,
+.tray-popup-anchor,
+.speaker-popup-overlay,
+.speaker-popup-anchor,
+.bluetooth-overlay,
+.bluetooth-icon {
+  background: transparent;
+}
+
+.bar-shell {
+  padding: 6px 10px 0 3px;
+}
+
+.bar-surface {
+  min-height: 24px;
+}
+
+.bar-left,
+.bar-right {
+  min-width: 180px;
+}
+
+.arch-button,
+.tray-trigger,
+.speaker-trigger,
+.icon-chip,
+.clock-chip {
+  min-height: 24px;
+  background: transparent;
+}
+
+.icon-chip {
+  min-width: 20px;
+}
+
+.arch-button {
+  min-width: 30px;
+  min-height: 28px;
+  border-radius: 5px;
+}
+
+.tray-trigger {
+  min-width: 20px;
+  border-radius: 5px;
+}
+
+.speaker-trigger {
+  min-width: 20px;
+  border-radius: 5px;
+}
+
+.arch-icon,
+.status-icon {
+  font-size: 12px;
+  color: $fg-soft;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.tray-trigger:hover .tray-icon {
+  color: $fg;
+}
+
+.speaker-trigger:hover .speaker-icon {
+  color: $fg;
+}
+
+.arch-button:hover .arch-icon {
+  color: $fg;
+}
+
+.arch-button:hover,
+.tray-trigger:hover,
+.speaker-trigger:hover {
+  background-color: $popup-hover;
+}
+
+.bluetooth-slash {
+  background: transparent;
+  color: rgba(244, 247, 255, 0.72);
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.bluetooth-slash.on {
+  color: transparent;
+}
+
+.arch-icon {
+  color: $accent;
+  font-size: 15px;
+}
+
+.tray-chip .status-icon,
+.lock-chip .status-icon {
+  color: $fg-faint;
+}
+
+.speaker-trigger.muted .speaker-icon {
+  color: rgba(244, 247, 255, 0.5);
+}
+
+.bluetooth-chip.on .status-icon,
+.network-chip.online .status-icon {
+  color: $fg-soft;
+}
+
+.network-chip.connecting .status-icon {
+  color: $accent;
+}
+
+.bluetooth-chip.off .status-icon,
+.network-chip.offline .status-icon {
+  color: rgba(244, 247, 255, 0.5);
+}
+
+.current-app-wrap {
+  padding: 0 14px;
+}
+
+.current-app {
+  color: $fg-soft;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.clock-chip {
+  padding: 0 6px 0 4px;
+}
+
+.clock {
+  color: $fg-soft;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.tray-popup-card,
+.speaker-popup-card,
+.arch-popup-card {
+  min-width: 0;
+  padding: 10px;
+  background-color: $popup-bg;
+  border: 1px solid $popup-border;
+  border-radius: 7px;
+  box-shadow:
+    0 12px 28px $popup-shadow,
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.tray-popup-anchor {
+  padding: 0 86px 0 0;
+}
+
+.speaker-popup-anchor {
+  padding: 0 62px 0 0;
+}
+
+.arch-popup-anchor {
+  padding: 0 0 0 6px;
+}
+
+.open-app-list,
+.open-app-row {
+  background: transparent;
+}
+
+.open-app-entry {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+  border-radius: 5px;
+  background-color: transparent;
+}
+
+.open-app-entry:hover {
+  background-color: $popup-hover;
+}
+
+.open-app-icon {
+  min-width: 18px;
+  font-size: 16px;
+  color: $fg-soft;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.speaker-popup-card {
+  min-width: 248px;
+  padding: 10px;
+}
+
+.speaker-popup-header,
+.speaker-popup-header-copy,
+.audio-link-inner,
+.audio-control-row,
+.audio-row-header,
+.audio-row-copy,
+.audio-row-controls,
+.audio-slider,
+.audio-slider trough,
+.audio-slider highlight,
+.audio-slider slider {
+  background: transparent;
+}
+
+.speaker-popup-header-icon,
+.audio-row-icon {
+  min-width: 16px;
+  color: $accent;
+  font-size: 13px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.speaker-popup-title {
+  color: $fg;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.speaker-popup-subtitle {
+  color: $fg-faint;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.25px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.speaker-popup-header {
+  min-height: 34px;
+  padding: 2px 4px 6px;
+}
+
+.audio-row-title {
+  color: $fg;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.audio-row-subtitle {
+  color: $fg-faint;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.24px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.audio-row-level {
+  color: $accent;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.32px;
+  min-width: 34px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.audio-control-row {
+  padding: 9px 10px 10px;
+  background-color: rgba(255, 255, 255, 0.026);
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 10px;
+}
+
+.audio-control-row.muted {
+  background-color: rgba(255, 255, 255, 0.016);
+  border-color: rgba(255, 255, 255, 0.03);
+}
+
+.audio-control-row.muted .audio-row-icon,
+.audio-control-row.muted .audio-row-level {
+  color: rgba(244, 247, 255, 0.62);
+}
+
+.audio-row-controls {
+  padding-left: 24px;
+}
+
+.audio-toggle-button,
+.audio-link-button {
+  min-height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.audio-toggle-button:hover,
+.audio-link-button:hover {
+  background-color: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.audio-toggle-button {
+  min-width: 70px;
+  padding: 0 10px;
+}
+
+.audio-link-button {
+  padding: 0 10px;
+}
+
+.audio-toggle-label,
+.audio-link-label {
+  color: $fg-soft;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.audio-toggle-button.muted {
+  background-color: rgba(255, 255, 255, 0.022);
+}
+
+.audio-link-icon {
+  min-width: 14px;
+  color: $accent;
+  font-size: 12px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.audio-slider {
+  min-width: 112px;
+}
+
+.audio-slider trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.085);
+}
+
+.audio-slider highlight {
+  border-radius: 999px;
+  background-color: $accent;
+}
+
+.audio-slider slider {
+  min-width: 12px;
+  min-height: 12px;
+  margin: -5px 0;
+  border-radius: 999px;
+  background-color: $fg;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.arch-popup-card {
+  min-width: 220px;
+  padding: 12px 14px 12px 10px;
+}
+
+.arch-popup-header,
+.arch-popup-avatar {
+  background: transparent;
+}
+
+.arch-popup-avatar {
+  min-width: 16px;
+  min-height: 16px;
+  background-color: transparent;
+}
+
+.arch-popup-avatar-icon {
+  color: $accent;
+  font-size: 16px;
+  text-shadow: 0 1px 3px $shadow;
+}
+
+.arch-popup-user {
+  color: $fg-soft;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  margin-left: -1px;
+  text-shadow: 0 1px 3px $shadow;
+}
