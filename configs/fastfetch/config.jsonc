@@ -1,0 +1,141 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/master/doc/json_schema.json",
+  "logo": {
+    "type": "data",
+    "source": "          /\\\n         /  \\\n        / /\\ \\\n       / /  \\ \\\n      / /____\\ \\\n     /_/      \\_\\",
+    "padding": {
+      "top": 1,
+      "left": 1,
+      "right": 3
+    },
+    "color": {
+      "1": "111",
+      "2": "147",
+      "3": "183"
+    }
+  },
+  "display": {
+    "separator": "  ➜ ",
+    "color": {
+      "keys": "111",
+      "title": "147",
+      "separator": "111",
+      "output": ""
+    },
+    "constants": [
+      "────────────────────────────────────────────────────────────────────",
+      "│\u001b[68C│\u001b[68D"
+    ],
+    "key": {
+      "width": 0,
+      "type": "string",
+      "paddingLeft": 0
+    },
+    "duration": {
+      "abbreviation": true,
+      "spaceBeforeUnit": "default"
+    },
+    "size": {
+      "maxPrefix": "YB",
+      "binaryPrefix": "iec",
+      "ndigits": 1,
+      "spaceBeforeUnit": "default"
+    },
+    "freq": {
+      "ndigits": 1,
+      "spaceBeforeUnit": "never"
+    },
+    "percent": {
+      "type": [
+        "num-color"
+      ],
+      "ndigits": 0,
+      "color": {
+        "green": "111",
+        "yellow": "147",
+        "red": "203"
+      },
+      "spaceBeforeUnit": "default",
+      "width": 0
+    }
+  },
+  "modules": [
+    {
+      "type": "custom",
+      "format": "{#111}┌{$1}┐"
+    },
+    {
+      "type": "title",
+      "key": "{$2} User      ",
+      "format": "{#147}{user-name}{#111}@{#147}{host-name}"
+    },
+    {
+      "type": "os",
+      "key": "{$2} OS        "
+    },
+    {
+      "type": "kernel",
+      "key": "{$2} Kernel    "
+    },
+    {
+      "type": "packages",
+      "key": "{$2} Packages  ",
+      "combined": false
+    },
+    {
+      "type": "terminal",
+      "key": "{$2} Terminal  "
+    },
+    {
+      "type": "shell",
+      "key": "{$2} Shell     "
+    },
+    {
+      "type": "display",
+      "key": "{$2} Display   ",
+      "compactType": "original-with-refresh-rate"
+    },
+    {
+      "type": "cpu",
+      "key": "{$2} CPU       ",
+      "showPeCoreCount": false,
+      "temp": false
+    },
+    {
+      "type": "gpu",
+      "key": "{$2} GPU       ",
+      "detectionMethod": "pci",
+      "temp": false,
+      "hideType": "none",
+      "format": "{name}"
+    },
+    {
+      "type": "command",
+      "key": "{$2} Disks     ",
+      "text": "lsblk -dn -o TYPE | awk '$1==\"disk\"{c++} END{print c+0}'",
+      "format": "{}"
+    },
+    {
+      "type": "memory",
+      "key": "{$2} Memory    "
+    },
+    {
+      "type": "custom",
+      "format": "{#111}└{$1}┘"
+    },
+    "break",
+    {
+      "type": "colors",
+      "key": " ",
+      "symbol": "block",
+      "paddingLeft": 0,
+      "block": {
+        "width": 3,
+        "range": [
+          0,
+          15
+        ]
+      }
+    }
+  ]
+}

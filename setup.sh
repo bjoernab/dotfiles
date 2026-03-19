@@ -47,6 +47,7 @@ APP_PACKAGES=(
   feh
   mousepad
   code
+  fastfetch
 )
 
 FILE_MANAGER_PACKAGES=(
@@ -192,7 +193,7 @@ prompt_user_choices() {
     print_info "Browser install skipped."
   fi
 
-  if ask_yes_no "Install extra apps (mpv, feh, mousepad, code)? [Y/n]: " "y"; then
+  if ask_yes_no "Install extra apps (mpv, feh, mousepad, code, fastfetch)? [Y/n]: " "y"; then
     INSTALL_EXTRA_APPS="true"
     print_success "Extra app install enabled."
   else
@@ -633,6 +634,12 @@ deploy_configs() {
     fi
 
     if copy_config_dir "$REPO_DIR/configs/mako" "$HOME/.config/mako"; then
+      copied_any=1
+    else
+      rc=1
+    fi
+
+    if copy_config_dir "$REPO_DIR/configs/fastfetch" "$HOME/.config/fastfetch"; then
       copied_any=1
     else
       rc=1
