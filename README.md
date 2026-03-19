@@ -1,9 +1,6 @@
 # 🧩 dotfiles
 
-Minimal, portable **Arch Linux + Hyprland** dotfiles.
-
-Test change #1
-Test change #2
+Minimal, portable **Arch Linux + Hyprland** setup with automated bootstrap.
 
 ---
 
@@ -14,24 +11,35 @@ Test change #2
 
 ## 📦 Overview
 
-This repository contains my personal configuration for:
+This repository contains:
+
+- ⚙️ Bootstrap installer for fresh Arch systems
+- 🧩 Hyprland configuration (WIP)
+- 📦 Package definitions
+- 🔁 Update workflow
+
+### Components (planned / partial)
 
 - Hyprland (Wayland compositor)
 - Waybar (status bar)
-- Wofi / launcher
+- Wofi (launcher)
 - Kitty (terminal)
 - Mako (notifications)
 - Shell (bash/zsh)
 
-The goal is:
+---
+
+## 🎯 Goal
+
 > ⚡ Fast setup • 🧼 Clean structure • 🔁 Easy portability
 
 ---
 
-## 🚀 Installation
+## 🚀 Installation (Recommended Flow)
 
-Clone the repository:
+### 1. Install Arch Linux
+
+From live ISO:
 
 ```bash
-git clone https://github.com/yourname/dotfiles.git
-cd dotfiles
+archinstall
