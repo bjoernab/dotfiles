@@ -24,6 +24,7 @@ HYPRLAND_PACKAGES=(
   polkit-gnome
   hyprpaper
   hyprlock
+  swayidle
 )
 
 HYPRLAND_AUR_PACKAGES=(
@@ -60,6 +61,16 @@ BROWSER_PACKAGES=(
   firefox
 )
 
+USER_DIRECTORIES=(
+  Downloads
+  Videos
+  Scripts
+  Images
+  Images/wallpapers
+  Documents
+  Desktop
+)
+
 # =========================
 # colors
 # =========================
@@ -82,6 +93,7 @@ PASSED_STEPS=()
 INSTALL_FILE_MANAGER="true"
 INSTALL_BROWSER="false"
 COPY_CONFIGS="true"
+COPY_SHELL_DOTFILES="false"
 INSTALL_EXTRA_APPS="true"
 SET_ZSH_DEFAULT="true"
 
@@ -188,12 +200,20 @@ prompt_user_choices() {
     print_info "Extra app install skipped."
   fi
 
-  if ask_yes_no "Copy dotfiles into ~/.config? [Y/n]: " "y"; then
+  if ask_yes_no "Copy app configs into ~/.config? [Y/n]: " "y"; then
     COPY_CONFIGS="true"
-    print_success "Config copy enabled."
+    print_success "~/.config copy enabled."
   else
     COPY_CONFIGS="false"
-    print_info "Config copy skipped."
+    print_info "~/.config copy skipped."
+  fi
+
+  if ask_yes_no "Copy shell dotfiles (~/.zshrc and ~/.bashrc)? [y/N]: " "n"; then
+    COPY_SHELL_DOTFILES="true"
+    print_success "Shell dotfile copy enabled."
+  else
+    COPY_SHELL_DOTFILES="false"
+    print_info "Shell dotfile copy skipped."
   fi
 
   if ask_yes_no "Install zsh and make it your default shell? [Y/n]: " "y"; then
@@ -351,6 +371,10 @@ ensure_yay_installed() {
     rc=1
   fi
 
+  if [[ "$rc" -eq 0 ]] && ! command -v yay >/dev/null 2>&1; then
+    rc=1
+  fi
+
   rm -rf "$build_root"
   return "$rc"
 }
@@ -385,13 +409,109 @@ install_aur_package_group() {
 # config deployment
 # =========================
 
+create_user_directories() {
+  local directory
+  local rc=0
+
+  print_header "CREATING USER DIRECTORIES"
+
+  for directory in "${USER_DIRECTORIES[@]}"; do
+    if mkdir -p "$HOME/$directory"; then
+      print_info "Ensured directory exists: $HOME/$directory"
+    else
+      print_error "Failed to create directory: $HOME/$directory"
+      rc=1
+    fi
+  done
+
+  report_step_result "Created user directories" "$rc"
+  return "$rc"
+}
+
+deploy_wallpapers() {
+  local source_dir="$REPO_DIR/images"
+  local target_dir="$HOME/Images/wallpapers"
+  local rc=0
+
+  print_header "DEPLOYING WALLPAPERS"
+
+  if [[ ! -d "$source_dir" ]]; then
+    print_error "Wallpaper source directory not found: $source_dir"
+    report_step_result "Deployed wallpapers" 1
+    return 1
+  fi
+
+  if ! find "$source_dir" -maxdepth 1 -type f | grep -q .; then
+    print_error "No wallpaper files found in: $source_dir"
+    report_step_result "Deployed wallpapers" 1
+    return 1
+  fi
+
+  if ! mkdir -p "$target_dir"; then
+    print_error "Failed to create wallpaper directory: $target_dir"
+    report_step_result "Deployed wallpapers" 1
+    return 1
+  fi
+
+  if ! cp -af "$source_dir/." "$target_dir/"; then
+    rc=1
+  fi
+
+  report_step_result "Deployed wallpapers" "$rc"
+  return "$rc"
+}
+
+deploy_user_scripts() {
+  local rc=0
+  local source_file="$REPO_DIR/home/Scripts/Lock/idle.sh"
+  local target_file="$HOME/Scripts/Lock/idle.sh"
+
+  print_header "DEPLOYING USER SCRIPTS"
+
+  if ! copy_home_file "$source_file" "$target_file"; then
+    rc=1
+  elif ! chmod +x "$target_file"; then
+    print_error "Failed to make script executable: $target_file"
+    rc=1
+  fi
+
+  report_step_result "Deployed user scripts" "$rc"
+  return "$rc"
+}
+
 escape_sed_replacement() {
   printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'
+}
+
+is_text_file() {
+  local target_file="$1"
+
+  if [[ ! -f "$target_file" ]]; then
+    return 1
+  fi
+
+  if [[ ! -s "$target_file" ]]; then
+    return 0
+  fi
+
+  LC_ALL=C grep -Iq . "$target_file"
 }
 
 render_placeholders_in_file() {
   local target_file="$1"
   local home_replacement user_replacement
+
+  if [[ ! -f "$target_file" ]]; then
+    return 0
+  fi
+
+  if ! is_text_file "$target_file"; then
+    return 0
+  fi
+
+  if ! grep -qE '@(HOME|USER)@' "$target_file"; then
+    return 0
+  fi
 
   home_replacement="$(escape_sed_replacement "$HOME")"
   user_replacement="$(escape_sed_replacement "$USER")"
@@ -468,6 +588,7 @@ copy_home_file() {
     return 1
   fi
 
+  mkdir -p "$(dirname "$target_file")" || return 1
   backup_home_file "$target_file" || return 1
   cp -a "$source_file" "$target_file" || return 1
   render_placeholders_in_file "$target_file"
@@ -477,71 +598,79 @@ deploy_configs() {
   local rc=0
   local copied_any=0
 
-  if [[ "$COPY_CONFIGS" != "true" ]]; then
-    print_info "Config deployment skipped."
+  if [[ "$COPY_CONFIGS" != "true" && "$COPY_SHELL_DOTFILES" != "true" ]]; then
+    print_info "Dotfile deployment skipped."
     return 0
   fi
 
-  print_header "DEPLOYING CONFIGS"
+  print_header "DEPLOYING DOTFILES"
 
-  mkdir -p "$HOME/.config" || rc=1
+  if [[ "$COPY_CONFIGS" == "true" ]]; then
+    mkdir -p "$HOME/.config" || rc=1
 
-  if copy_config_dir "$REPO_DIR/configs/hypr" "$HOME/.config/hypr"; then
-    copied_any=1
+    if copy_config_dir "$REPO_DIR/configs/hypr" "$HOME/.config/hypr"; then
+      copied_any=1
+    else
+      rc=1
+    fi
+
+    if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
+      copied_any=1
+    else
+      rc=1
+    fi
+
+    if copy_config_dir "$REPO_DIR/configs/rofi" "$HOME/.config/rofi"; then
+      copied_any=1
+    else
+      rc=1
+    fi
+
+    if copy_config_dir "$REPO_DIR/configs/kitty" "$HOME/.config/kitty"; then
+      copied_any=1
+    else
+      rc=1
+    fi
+
+    if copy_config_dir "$REPO_DIR/configs/mako" "$HOME/.config/mako"; then
+      copied_any=1
+    else
+      rc=1
+    fi
+
+    if copy_config_dir "$REPO_DIR/configs/hyprpaper" "$HOME/.config/hyprpaper"; then
+      copied_any=1
+    else
+      rc=1
+    fi
+
+    if copy_config_dir "$REPO_DIR/configs/hyprlock" "$HOME/.config/hyprlock"; then
+      copied_any=1
+    else
+      rc=1
+    fi
   else
-    rc=1
+    print_info "~/.config deployment skipped."
   fi
 
-  if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
-    copied_any=1
-  else
-    rc=1
-  fi
+  if [[ "$COPY_SHELL_DOTFILES" == "true" ]]; then
+    if copy_home_file "$REPO_DIR/home/.zshrc" "$HOME/.zshrc"; then
+      copied_any=1
+    else
+      rc=1
+    fi
 
-  if copy_config_dir "$REPO_DIR/configs/rofi" "$HOME/.config/rofi"; then
-    copied_any=1
+    if copy_home_file "$REPO_DIR/home/.bashrc" "$HOME/.bashrc"; then
+      copied_any=1
+    else
+      rc=1
+    fi
   else
-    rc=1
-  fi
-
-  if copy_config_dir "$REPO_DIR/configs/kitty" "$HOME/.config/kitty"; then
-    copied_any=1
-  else
-    rc=1
-  fi
-
-  if copy_config_dir "$REPO_DIR/configs/mako" "$HOME/.config/mako"; then
-    copied_any=1
-  else
-    rc=1
-  fi
-
-  if copy_config_dir "$REPO_DIR/configs/hyprpaper" "$HOME/.config/hyprpaper"; then
-    copied_any=1
-  else
-    rc=1
-  fi
-
-  if copy_config_dir "$REPO_DIR/configs/hyprlock" "$HOME/.config/hyprlock"; then
-    copied_any=1
-  else
-    rc=1
-  fi
-
-  if copy_home_file "$REPO_DIR/home/.zshrc" "$HOME/.zshrc"; then
-    copied_any=1
-  else
-    rc=1
-  fi
-
-  if copy_home_file "$REPO_DIR/home/.bashrc" "$HOME/.bashrc"; then
-    copied_any=1
-  else
-    rc=1
+    print_info "Shell dotfile deployment skipped."
   fi
 
   if [[ "$copied_any" -eq 0 ]]; then
-    print_error "No configuration sources were copied."
+    print_error "No selected dotfiles were copied."
     rc=1
   fi
 
@@ -629,7 +758,12 @@ main() {
   }
 
   ensure_yay_installed
-  report_step_result "Installed yay" "$?"
+  local yay_rc=$?
+  report_step_result "Ensured yay is installed" "$yay_rc"
+  if [[ "$yay_rc" -ne 0 ]]; then
+    print_error "Cannot continue without yay for required AUR packages."
+    exit 1
+  fi
 
   install_package_group "HYPRLAND PACKAGES" "${HYPRLAND_PACKAGES[@]}"
   verify_packages_installed "HYPRLAND PACKAGES" "${HYPRLAND_PACKAGES[@]}" || record_fail "Verified HYPRLAND PACKAGES"
@@ -657,6 +791,10 @@ main() {
     install_package_group "APP PACKAGES" "${APP_PACKAGES[@]}"
     verify_packages_installed "APP PACKAGES" "${APP_PACKAGES[@]}" || record_fail "Verified APP PACKAGES"
   fi
+
+  create_user_directories
+  deploy_wallpapers
+  deploy_user_scripts
 
   install_and_set_zsh
   deploy_configs
