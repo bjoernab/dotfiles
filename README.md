@@ -1,9 +1,3 @@
-Good call — this is exactly where most users get confused, so making it explicit is important.
-
-Here’s your updated README with a **clear, dedicated “Run the installer” section** and corrected commands (`cd dotfiles`, `./install.sh`, plus git requirement).
-
----
-
 ````markdown
 # 🧩 dotfiles
 
