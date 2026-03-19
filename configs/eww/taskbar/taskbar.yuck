@@ -1,5 +1,5 @@
 (deflisten current_application :initial "Desktop"
-  `/home/vile/.config/eww/scripts/current-application.sh`)
+  `@HOME@/.config/eww/scripts/current-application.sh`)
 
 (defpoll speaker_state :interval "2s"
   `bash -lc 'muted=$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | awk "{print \$2}"); if [ "$muted" = "yes" ]; then echo muted; else echo normal; fi'`)
@@ -17,7 +17,7 @@
   `bash -lc 'vol=$(pactl get-source-volume @DEFAULT_SOURCE@ 2>/dev/null | awk -F"/" "NR==1{gsub(/ /,\"\",\$2);gsub(/%/,\"\",\$2);print int(\$2)}"); if [ -z "$vol" ]; then vol=0; fi; if [ "$vol" -lt 0 ]; then vol=0; fi; if [ "$vol" -gt 100 ]; then vol=100; fi; printf "%s" "$vol"'`)
 
 (defpoll open_app_rows :interval "2s" :initial "[]"
-  `/home/vile/.config/eww/scripts/open-apps-json.sh`)
+  `@HOME@/.config/eww/scripts/open-apps-json.sh`)
 
 (defpoll bluetooth_state :interval "5s"
   `rfkill --output TYPE,SOFT,HARD 2>/dev/null | awk '$1 == "bluetooth" { if ($2 == "unblocked" && $3 == "unblocked") print "on"; else print "off"; found=1; exit } END { if (!found) print "off" }'`)
@@ -31,8 +31,8 @@
 (defpoll current_time :interval "15s"
   `date "+%H:%M"`)
 
-(defpoll current_identity :interval "30m" :initial "vile@archlinux"
-  `user="$USER"; if [ -z "$user" ]; then user=$(whoami 2>/dev/null || printf 'vile'); fi; printf '%s@%s' "$user" "$(hostname -s 2>/dev/null || printf 'archlinux')"` )
+(defpoll current_identity :interval "30m" :initial "@USER@@archlinux"
+  `user="$USER"; if [ -z "$user" ]; then user=$(whoami 2>/dev/null || printf '@USER@'); fi; printf '%s@%s' "$user" "$(hostname -s 2>/dev/null || printf 'archlinux')"` )
 
 (defwidget icon-chip [class icon]
   (box :class { "icon-chip " + class } :valign "center"

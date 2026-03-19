@@ -8,7 +8,6 @@ set -u
 
 HYPRLAND_PACKAGES=(
   hyprland
-  eww
   rofi
   kitty
   mako
@@ -20,7 +19,6 @@ HYPRLAND_PACKAGES=(
   pavucontrol
   python
   perl
-  wvkbd
   xdg-desktop-portal
   xdg-desktop-portal-hyprland
   polkit-gnome
@@ -28,10 +26,18 @@ HYPRLAND_PACKAGES=(
   hyprlock
 )
 
+HYPRLAND_AUR_PACKAGES=(
+  eww
+  wvkbd
+)
+
 FONT_PACKAGES=(
   ttf-firacode-nerd
   ttf-jetbrains-mono
   ttf-nerd-fonts-symbols
+)
+
+FONT_AUR_PACKAGES=(
   ttf-twemoji
 )
 
@@ -296,9 +302,123 @@ verify_packages_installed() {
   return 1
 }
 
+install_single_aur_package() {
+  local package_name="$1"
+
+  if pacman -Q "$package_name" >/dev/null 2>&1; then
+    print_info "AUR package already installed: ${package_name}"
+    return 0
+  fi
+
+  if ! command -v yay >/dev/null 2>&1; then
+    print_error "yay is required to install AUR package ${package_name}."
+    return 1
+  fi
+
+  yay -S --needed --noconfirm "$package_name"
+}
+
+ensure_yay_installed() {
+  local build_root repo_dir rc=0
+
+  if command -v yay >/dev/null 2>&1; then
+    print_info "yay is already installed."
+    return 0
+  fi
+
+  if ! command -v git >/dev/null 2>&1; then
+    print_error "git is required to install yay."
+    return 1
+  fi
+
+  if ! command -v makepkg >/dev/null 2>&1; then
+    print_error "makepkg is required to install yay."
+    return 1
+  fi
+
+  print_header "INSTALLING YAY"
+  print_info "Bootstrapping yay from the AUR..."
+
+  build_root="$(mktemp -d)" || return 1
+  repo_dir="${build_root}/yay"
+
+  if ! git clone --depth 1 "https://aur.archlinux.org/yay.git" "$repo_dir"; then
+    rc=1
+  elif ! (
+    cd "$repo_dir" &&
+    makepkg -si --needed --noconfirm
+  ); then
+    rc=1
+  fi
+
+  rm -rf "$build_root"
+  return "$rc"
+}
+
+install_aur_package_group() {
+  local group_name="$1"
+  shift
+  local packages=("$@")
+  local pkg
+  local rc=0
+
+  if [[ "${#packages[@]}" -eq 0 ]]; then
+    print_warn "No AUR packages defined for ${group_name}. Skipping."
+    return 0
+  fi
+
+  print_header "INSTALLING ${group_name}"
+  print_info "Packages: ${packages[*]}"
+
+  for pkg in "${packages[@]}"; do
+    print_info "Installing AUR package: ${pkg}"
+    if ! install_single_aur_package "$pkg"; then
+      rc=1
+    fi
+  done
+
+  report_step_result "Installed ${group_name}" "$rc"
+  return "$rc"
+}
+
 # =========================
 # config deployment
 # =========================
+
+escape_sed_replacement() {
+  printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'
+}
+
+render_placeholders_in_file() {
+  local target_file="$1"
+  local home_replacement user_replacement
+
+  home_replacement="$(escape_sed_replacement "$HOME")"
+  user_replacement="$(escape_sed_replacement "$USER")"
+
+  sed -i \
+    -e "s|@HOME@|${home_replacement}|g" \
+    -e "s|@USER@|${user_replacement}|g" \
+    "$target_file"
+}
+
+render_placeholders_in_path() {
+  local target_path="$1"
+  local file
+
+  if [[ -f "$target_path" ]]; then
+    render_placeholders_in_file "$target_path"
+    return $?
+  fi
+
+  if [[ ! -d "$target_path" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r -d '' file; do
+    render_placeholders_in_file "$file" || return 1
+  done < <(find "$target_path" -type f -print0)
+}
 
 backup_config_dir() {
   local target="$1"
@@ -335,7 +455,8 @@ copy_config_dir() {
 
   backup_config_dir "$target_dir" || return 1
   mkdir -p "$(dirname "$target_dir")" || return 1
-  cp -a "$source_dir" "$target_dir"
+  cp -a "$source_dir" "$target_dir" || return 1
+  render_placeholders_in_path "$target_dir"
 }
 
 copy_home_file() {
@@ -348,7 +469,8 @@ copy_home_file() {
   fi
 
   backup_home_file "$target_file" || return 1
-  cp -a "$source_file" "$target_file"
+  cp -a "$source_file" "$target_file" || return 1
+  render_placeholders_in_file "$target_file"
 }
 
 deploy_configs() {
@@ -506,11 +628,20 @@ main() {
     exit 1
   }
 
+  ensure_yay_installed
+  report_step_result "Installed yay" "$?"
+
   install_package_group "HYPRLAND PACKAGES" "${HYPRLAND_PACKAGES[@]}"
   verify_packages_installed "HYPRLAND PACKAGES" "${HYPRLAND_PACKAGES[@]}" || record_fail "Verified HYPRLAND PACKAGES"
 
+  install_aur_package_group "HYPRLAND AUR PACKAGES" "${HYPRLAND_AUR_PACKAGES[@]}"
+  verify_packages_installed "HYPRLAND AUR PACKAGES" "${HYPRLAND_AUR_PACKAGES[@]}" || record_fail "Verified HYPRLAND AUR PACKAGES"
+
   install_package_group "FONT PACKAGES" "${FONT_PACKAGES[@]}"
   verify_packages_installed "FONT PACKAGES" "${FONT_PACKAGES[@]}" || record_fail "Verified FONT PACKAGES"
+
+  install_aur_package_group "FONT AUR PACKAGES" "${FONT_AUR_PACKAGES[@]}"
+  verify_packages_installed "FONT AUR PACKAGES" "${FONT_AUR_PACKAGES[@]}" || record_fail "Verified FONT AUR PACKAGES"
 
   if [[ "$INSTALL_FILE_MANAGER" == "true" ]]; then
     install_package_group "FILE MANAGER PACKAGES" "${FILE_MANAGER_PACKAGES[@]}"
