@@ -44,17 +44,10 @@ From live ISO:
 
 ```bash
 archinstall
-
-
-Complete installation normally.
-
----
+# Complete installation normally.
+```
 
 ### 2. Chroot into installed system
-
-```bash
-arch-chroot /mnt
-```
 
 ---
 
