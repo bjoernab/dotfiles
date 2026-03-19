@@ -33,7 +33,7 @@ This repository contains:
 ## 🎯 Goal
 
 > ⚡ Fast setup • 🧼 Clean structure • 🔁 Easy portability
-
+````
 ---
 
 ## 🚀 Installation (Recommended Flow)
@@ -44,7 +44,7 @@ From live ISO:
 
 ```bash
 archinstall
-````
+
 
 Complete installation normally.
 
