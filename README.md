@@ -2,6 +2,8 @@
 
 Minimal, portable **Arch Linux + Hyprland** dotfiles.
 
+Test change #1
+
 ---
 
 ## 📸 Preview
