@@ -95,6 +95,7 @@ RESET="\033[0m"
 FAILED_STEPS=()
 PASSED_STEPS=()
 
+UNINSTALL_MODE=""
 REMOVE_CORE="false"
 GPU_CHOICE=""
 AUDIO_CHOICE=""
@@ -201,6 +202,121 @@ ask_yes_no() {
       *) print_warn "Please answer y or n." ;;
     esac
   done
+}
+
+package_is_installed() {
+  pacman -Q "$1" >/dev/null 2>&1
+}
+
+any_packages_installed() {
+  local pkg
+
+  for pkg in "$@"; do
+    if package_is_installed "$pkg"; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+all_packages_installed() {
+  local pkg
+
+  for pkg in "$@"; do
+    if ! package_is_installed "$pkg"; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+select_uninstall_mode() {
+  print_header "UNINSTALL MODE"
+  print_line "A) Uninstall everything the installer installed (auto detect)"
+  print_line "B) Interactive uninstall flow"
+  print_line "C) Return without doing anything"
+  print_line ""
+
+  while true; do
+    read -r -p "Choose mode [A/B/C] (default: B): " choice
+    choice="${choice:-B}"
+
+    case "${choice^^}" in
+      A|1)
+        UNINSTALL_MODE="auto"
+        print_success "Selected mode: auto-detect uninstall."
+        break
+        ;;
+      B|2)
+        UNINSTALL_MODE="interactive"
+        print_success "Selected mode: interactive uninstall."
+        break
+        ;;
+      C|3)
+        print_info "Returning without making changes."
+        exit 0
+        ;;
+      *)
+        print_warn "Invalid choice. Enter A, B, or C."
+        ;;
+    esac
+  done
+}
+
+auto_detect_selections() {
+  print_header "AUTO-DETECTING INSTALLED COMPONENTS"
+
+  if all_packages_installed "${CORE_PACKAGES[@]}"; then
+    REMOVE_CORE="true"
+  else
+    REMOVE_CORE="false"
+  fi
+  print_info "Core package removal: ${REMOVE_CORE}"
+
+  if package_is_installed "nvidia-open"; then
+    GPU_CHOICE="nvidia-open"
+  elif package_is_installed "nvidia"; then
+    GPU_CHOICE="nvidia-proprietary"
+  elif any_packages_installed libva-mesa-driver vulkan-radeon xf86-video-amdgpu; then
+    GPU_CHOICE="amd"
+  elif any_packages_installed vulkan-intel intel-media-driver libva-intel-driver; then
+    GPU_CHOICE="intel"
+  else
+    GPU_CHOICE="skip"
+  fi
+  print_info "GPU removal: ${GPU_CHOICE}"
+
+  if any_packages_installed "${PIPEWIRE_PACKAGES[@]}"; then
+    AUDIO_CHOICE="pipewire"
+  else
+    AUDIO_CHOICE="skip"
+  fi
+  print_info "Audio removal: ${AUDIO_CHOICE}"
+
+  if package_is_installed "networkmanager" || systemctl is-enabled NetworkManager >/dev/null 2>&1; then
+    NETWORK_CHOICE="networkmanager"
+  elif systemctl is-enabled systemd-networkd >/dev/null 2>&1 || systemctl is-enabled systemd-resolved >/dev/null 2>&1; then
+    NETWORK_CHOICE="systemd-networkd"
+  else
+    NETWORK_CHOICE="skip"
+  fi
+  print_info "Network removal: ${NETWORK_CHOICE}"
+
+  if any_packages_installed "${LAPTOP_PACKAGES[@]}" || systemctl is-enabled tlp >/dev/null 2>&1; then
+    REMOVE_LAPTOP="true"
+  else
+    REMOVE_LAPTOP="false"
+  fi
+  print_info "Laptop removal: ${REMOVE_LAPTOP}"
+
+  if any_packages_installed "${BLUETOOTH_PACKAGES[@]}" || systemctl is-enabled bluetooth >/dev/null 2>&1; then
+    REMOVE_BLUETOOTH="true"
+  else
+    REMOVE_BLUETOOTH="false"
+  fi
+  print_info "Bluetooth removal: ${REMOVE_BLUETOOTH}"
 }
 
 prompt_core_removal() {
@@ -653,6 +769,7 @@ remove_bluetooth_selection() {
 
 print_selection_summary() {
   print_header "SELECTED OPTIONS"
+  print_line "Mode:       ${UNINSTALL_MODE}"
   print_line "Core:       ${REMOVE_CORE}"
   print_line "GPU:        ${GPU_CHOICE}"
   print_line "Audio:      ${AUDIO_CHOICE}"
@@ -715,7 +832,14 @@ main() {
   print_header "ARCH CHROOT UNINSTALL"
 
   preflight_checks
-  prompt_user_choices
+  select_uninstall_mode
+
+  if [[ "$UNINSTALL_MODE" == "auto" ]]; then
+    auto_detect_selections
+  else
+    prompt_user_choices
+  fi
+
   print_selection_summary
   confirm_uninstall
 
