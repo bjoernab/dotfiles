@@ -9,6 +9,15 @@ cleanup_osk() {
     done
 }
 
+lock_script="${HOME}/Scripts/Lock/lock-now.sh"
+
+if [[ -x "$lock_script" ]]; then
+    "$lock_script" "$@"
+    status=$?
+    cleanup_osk
+    exit "$status"
+fi
+
 if command -v hyprlock >/dev/null 2>&1; then
     hyprlock "$@"
     status=$?

@@ -1,0 +1,6 @@
+git
+base-devel
+sudo
+curl
+wget
+nano

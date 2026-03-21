@@ -2,6 +2,12 @@
 
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/helpers.sh
+source "$SCRIPT_DIR/scripts/helpers.sh"
+# shellcheck source=scripts/print_status.sh
+source "$SCRIPT_DIR/scripts/print_status.sh"
+
 # =========================
 # config
 # =========================
@@ -76,25 +82,32 @@ BLUETOOTH_PACKAGES=(
   bluez-utils
 )
 
-# =========================
-# colors
-# =========================
+MANAGED_CONFIG_DIRS=(
+  hypr
+  eww
+  rofi
+  kitty
+  mako
+  fastfetch
+  hyprpaper
+  hyprlock
+)
 
-RED="\033[1;31m"
-GREEN="\033[1;32m"
-YELLOW="\033[1;33m"
-BLUE="\033[1;34m"
-CYAN="\033[1;36m"
-BOLD="\033[1m"
-RESET="\033[0m"
+MANAGED_HOME_FILES=(
+  .zshrc
+  .bashrc
+)
+
+MANAGED_USER_SCRIPT_TARGETS=(
+  Scripts/Lock/idle.sh
+  Scripts/Lock/lock-now.sh
+)
 
 # =========================
 # state
 # =========================
 
-FAILED_STEPS=()
-PASSED_STEPS=()
-
+STATUS_USE_ASCII="true"
 UNINSTALL_MODE=""
 REMOVE_CORE="false"
 GPU_CHOICE=""
@@ -102,135 +115,18 @@ AUDIO_CHOICE=""
 NETWORK_CHOICE=""
 REMOVE_LAPTOP="false"
 REMOVE_BLUETOOTH="false"
-
-# =========================
-# ui helpers
-# =========================
-
-print_line() {
-  printf '%b\n' "${1}"
-}
-
-print_header() {
-  print_line ""
-  print_line "${CYAN}${BOLD}========================================${RESET}"
-  print_line "${CYAN}${BOLD}$1${RESET}"
-  print_line "${CYAN}${BOLD}========================================${RESET}"
-}
-
-print_info() {
-  print_line "${BLUE}[*]${RESET} $1"
-}
-
-print_warn() {
-  print_line "${YELLOW}[!]${RESET} $1"
-}
-
-print_error() {
-  print_line "${RED}[x]${RESET} $1"
-}
-
-print_success() {
-  print_line "${GREEN}[+]${RESET} $1"
-}
-
-print_ascii_success() {
-  print_line "${GREEN}${BOLD}"
-  cat <<'EOF'
-  _____ _    _  _____  _____ ______  _____ _____
- / ____| |  | |/ ____|/ ____|  ____|/ ____/ ____|
-| (___ | |  | | |    | |    | |__  | (___| (___
- \___ \| |  | | |    | |    |  __|  \___ \\___ \
- ____) | |__| | |____| |____| |____ ____) |___) |
-|_____/ \____/ \_____|\_____|______|_____/_____/
-EOF
-  print_line "${RESET}"
-}
-
-print_ascii_error() {
-  print_line "${RED}${BOLD}"
-  cat <<'EOF'
- ______ _____  _____   ____  _____
-|  ____|  __ \|  __ \ / __ \|  __ \
-| |__  | |__) | |__) | |  | | |__) |
-|  __| |  _  /|  _  /| |  | |  _  /
-| |____| | \ \| | \ \| |__| | | \ \
-|______|_|  \_\_|  \_\\____/|_|  \_\
-EOF
-  print_line "${RESET}"
-}
-
-record_pass() {
-  PASSED_STEPS+=("$1")
-}
-
-record_fail() {
-  FAILED_STEPS+=("$1")
-}
-
-report_step_result() {
-  local step_name="$1"
-  local exit_code="$2"
-
-  if [[ "$exit_code" -eq 0 ]]; then
-    print_ascii_success
-    print_success "${step_name}"
-    record_pass "${step_name}"
-  else
-    print_ascii_error
-    print_error "${step_name}"
-    record_fail "${step_name}"
-  fi
-}
+REMOVE_APP_CONFIGS="false"
+REMOVE_SHELL_DOTFILES="false"
+REMOVE_WALLPAPERS="false"
+REMOVE_USER_SCRIPTS="false"
+TARGET_USER=""
+TARGET_HOME=""
+HOME_UNINSTALL_BACKUP_DIR=""
+UNINSTALL_TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # =========================
 # prompt helpers
 # =========================
-
-ask_yes_no() {
-  local prompt="$1"
-  local default="$2"
-  local reply
-
-  while true; do
-    read -r -p "$prompt" reply
-    reply="${reply:-$default}"
-
-    case "${reply,,}" in
-      y|yes) return 0 ;;
-      n|no) return 1 ;;
-      *) print_warn "Please answer y or n." ;;
-    esac
-  done
-}
-
-package_is_installed() {
-  pacman -Q "$1" >/dev/null 2>&1
-}
-
-any_packages_installed() {
-  local pkg
-
-  for pkg in "$@"; do
-    if package_is_installed "$pkg"; then
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-all_packages_installed() {
-  local pkg
-
-  for pkg in "$@"; do
-    if ! package_is_installed "$pkg"; then
-      return 1
-    fi
-  done
-
-  return 0
-}
 
 select_uninstall_mode() {
   print_header "UNINSTALL MODE"
@@ -317,6 +213,8 @@ auto_detect_selections() {
     REMOVE_BLUETOOTH="false"
   fi
   print_info "Bluetooth removal: ${REMOVE_BLUETOOTH}"
+
+  auto_detect_home_cleanup_selections
 }
 
 prompt_core_removal() {
@@ -420,6 +318,54 @@ prompt_optional_components() {
   fi
 }
 
+prompt_home_cleanup_options() {
+  print_header "HOME FILE REMOVAL"
+
+  if ! resolve_target_home_context; then
+    print_warn "Could not auto-detect a single user home inside the installed system."
+    print_warn "Set DOTFILES_TARGET_USER before running if you want to remove deployed dotfiles/assets too."
+    REMOVE_APP_CONFIGS="false"
+    REMOVE_SHELL_DOTFILES="false"
+    REMOVE_WALLPAPERS="false"
+    REMOVE_USER_SCRIPTS="false"
+    return 0
+  fi
+
+  print_info "Targeting user ${TARGET_USER} at ${TARGET_HOME}"
+
+  if ask_yes_no "Remove deployed app configs from ${TARGET_HOME}/.config? [y/N]: " "n"; then
+    REMOVE_APP_CONFIGS="true"
+    print_success "App config removal enabled."
+  else
+    REMOVE_APP_CONFIGS="false"
+    print_info "App config removal skipped."
+  fi
+
+  if ask_yes_no "Remove deployed shell dotfiles (${TARGET_HOME}/.zshrc and ${TARGET_HOME}/.bashrc)? [y/N]: " "n"; then
+    REMOVE_SHELL_DOTFILES="true"
+    print_success "Shell dotfile removal enabled."
+  else
+    REMOVE_SHELL_DOTFILES="false"
+    print_info "Shell dotfile removal skipped."
+  fi
+
+  if ask_yes_no "Remove repo wallpapers from ${TARGET_HOME}/Images/wallpapers? [y/N]: " "n"; then
+    REMOVE_WALLPAPERS="true"
+    print_success "Wallpaper removal enabled."
+  else
+    REMOVE_WALLPAPERS="false"
+    print_info "Wallpaper removal skipped."
+  fi
+
+  if ask_yes_no "Remove deployed user scripts from ${TARGET_HOME}/Scripts/Lock? [y/N]: " "n"; then
+    REMOVE_USER_SCRIPTS="true"
+    print_success "User script removal enabled."
+  else
+    REMOVE_USER_SCRIPTS="false"
+    print_info "User script removal skipped."
+  fi
+}
+
 prompt_user_choices() {
   print_header "UNINSTALLER OPTIONS"
   prompt_core_removal
@@ -427,6 +373,7 @@ prompt_user_choices() {
   select_audio_choice
   select_network_choice
   prompt_optional_components
+  prompt_home_cleanup_options
 }
 
 confirm_uninstall() {
@@ -440,51 +387,115 @@ confirm_uninstall() {
   exit 0
 }
 
-# =========================
-# checks
-# =========================
-
-check_root() {
-  [[ "${EUID}" -eq 0 ]]
-}
-
-check_arch() {
-  [[ -f /etc/arch-release ]] && command -v pacman >/dev/null 2>&1
-}
-
-check_chroot() {
-  if command -v systemd-detect-virt >/dev/null 2>&1; then
-    systemd-detect-virt --chroot >/dev/null 2>&1
-    return $?
-  fi
-
-  [[ -f /etc/arch-release ]] && [[ -d /proc/1/root ]] && [[ "$(stat -c %d:%i /)" != "$(stat -c %d:%i /proc/1/root/. 2>/dev/null)" ]]
-}
-
 preflight_checks() {
-  print_header "PRE-FLIGHT CHECKS"
-
-  if ! check_root; then
-    print_error "This script must be run as root."
-    exit 1
-  fi
-
-  if ! check_arch; then
-    print_error "This script is intended for Arch Linux only."
-    exit 1
-  fi
-
-  if ! check_chroot; then
-    print_error "This script must be run from inside arch-chroot after archinstall."
-    exit 1
-  fi
-
-  print_success "Environment check passed: Arch + root + chroot detected."
+  preflight_arch_root_chroot
 }
 
 # =========================
 # package helpers
 # =========================
+
+resolve_target_home_context() {
+  local user_entry
+  local candidate_count
+
+  if [[ -n "${TARGET_USER}" && -n "${TARGET_HOME}" ]]; then
+    return 0
+  fi
+
+  if [[ -n "${DOTFILES_TARGET_USER:-}" ]]; then
+    user_entry="$(getent passwd "${DOTFILES_TARGET_USER}")" || {
+      print_warn "DOTFILES_TARGET_USER was set to '${DOTFILES_TARGET_USER}', but that user was not found."
+      return 1
+    }
+  else
+    candidate_count="$(awk -F: '$3 >= 1000 && $1 != "nobody" && $6 ~ /^\/home\// && $7 !~ /(nologin|false)$/ {count++} END {print count+0}' /etc/passwd)"
+
+    if [[ "${candidate_count}" -ne 1 ]]; then
+      if [[ "${candidate_count}" -eq 0 ]]; then
+        print_warn "No eligible non-root user under /home was detected."
+      else
+        print_warn "Multiple eligible users were detected. Set DOTFILES_TARGET_USER to choose one."
+      fi
+      return 1
+    fi
+
+    user_entry="$(awk -F: '$3 >= 1000 && $1 != "nobody" && $6 ~ /^\/home\// && $7 !~ /(nologin|false)$/ {print; exit}' /etc/passwd)"
+  fi
+
+  TARGET_USER="$(printf '%s\n' "$user_entry" | cut -d: -f1)"
+  TARGET_HOME="$(printf '%s\n' "$user_entry" | cut -d: -f6)"
+
+  [[ -n "${TARGET_USER}" && -n "${TARGET_HOME}" ]]
+}
+
+target_home_path_exists() {
+  [[ -n "${TARGET_HOME}" && -e "${TARGET_HOME}/$1" ]]
+}
+
+repo_wallpaper_file_exists_in_target_home() {
+  local source_file
+  local wallpaper_name
+
+  [[ -d "${SCRIPT_DIR}/images" ]] || return 1
+
+  for source_file in "${SCRIPT_DIR}"/images/*; do
+    [[ -f "${source_file}" ]] || continue
+    wallpaper_name="$(basename "${source_file}")"
+    if [[ -e "${TARGET_HOME}/Images/wallpapers/${wallpaper_name}" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+auto_detect_home_cleanup_selections() {
+  if ! resolve_target_home_context; then
+    REMOVE_APP_CONFIGS="false"
+    REMOVE_SHELL_DOTFILES="false"
+    REMOVE_WALLPAPERS="false"
+    REMOVE_USER_SCRIPTS="false"
+    return 0
+  fi
+
+  if target_home_path_exists ".config/hypr" ||
+     target_home_path_exists ".config/eww" ||
+     target_home_path_exists ".config/rofi" ||
+     target_home_path_exists ".config/kitty" ||
+     target_home_path_exists ".config/mako" ||
+     target_home_path_exists ".config/fastfetch" ||
+     target_home_path_exists ".config/hyprpaper" ||
+     target_home_path_exists ".config/hyprlock"; then
+    REMOVE_APP_CONFIGS="true"
+  else
+    REMOVE_APP_CONFIGS="false"
+  fi
+
+  if target_home_path_exists ".zshrc" || target_home_path_exists ".bashrc"; then
+    REMOVE_SHELL_DOTFILES="true"
+  else
+    REMOVE_SHELL_DOTFILES="false"
+  fi
+
+  if repo_wallpaper_file_exists_in_target_home; then
+    REMOVE_WALLPAPERS="true"
+  else
+    REMOVE_WALLPAPERS="false"
+  fi
+
+  if target_home_path_exists "Scripts/Lock/idle.sh" || target_home_path_exists "Scripts/Lock/lock-now.sh"; then
+    REMOVE_USER_SCRIPTS="true"
+  else
+    REMOVE_USER_SCRIPTS="false"
+  fi
+
+  print_info "Target user home cleanup: ${TARGET_USER} (${TARGET_HOME})"
+  print_info "App config removal: ${REMOVE_APP_CONFIGS}"
+  print_info "Shell dotfile removal: ${REMOVE_SHELL_DOTFILES}"
+  print_info "Wallpaper removal: ${REMOVE_WALLPAPERS}"
+  print_info "User script removal: ${REMOVE_USER_SCRIPTS}"
+}
 
 remove_package_group() {
   local group_name="$1"
@@ -544,6 +555,183 @@ verify_packages_removed() {
 
   print_error "Verification failed for ${group_name}. Still installed: ${remaining[*]}"
   return 1
+}
+
+# =========================
+# home cleanup helpers
+# =========================
+
+ensure_home_uninstall_backup_dir() {
+  local target_group
+
+  if [[ -n "${HOME_UNINSTALL_BACKUP_DIR}" ]]; then
+    return 0
+  fi
+
+  if ! resolve_target_home_context; then
+    return 1
+  fi
+
+  HOME_UNINSTALL_BACKUP_DIR="${TARGET_HOME}/.dotfiles-uninstall-backup-${UNINSTALL_TIMESTAMP}"
+  target_group="$(id -gn "${TARGET_USER}" 2>/dev/null || printf '%s' "${TARGET_USER}")"
+
+  install -d -m 700 -o "${TARGET_USER}" -g "${target_group}" "${HOME_UNINSTALL_BACKUP_DIR}" 2>/dev/null ||
+    mkdir -p "${HOME_UNINSTALL_BACKUP_DIR}" ||
+    return 1
+}
+
+cleanup_empty_parent_dirs() {
+  local removed_path="$1"
+  local parent_dir
+
+  parent_dir="$(dirname "${removed_path}")"
+
+  while [[ "${parent_dir}" != "${TARGET_HOME}" && "${parent_dir}" != "/" ]]; do
+    rmdir "${parent_dir}" 2>/dev/null || break
+    parent_dir="$(dirname "${parent_dir}")"
+  done
+}
+
+move_target_home_path_to_backup() {
+  local target_path="$1"
+  local relative_path
+  local backup_path
+
+  if [[ ! -e "${target_path}" ]]; then
+    print_info "Path not found. Skipping: ${target_path}"
+    return 0
+  fi
+
+  ensure_home_uninstall_backup_dir || return 1
+
+  relative_path="${target_path#${TARGET_HOME}/}"
+  backup_path="${HOME_UNINSTALL_BACKUP_DIR}/${relative_path}"
+
+  mkdir -p "$(dirname "${backup_path}")" || return 1
+  mv "${target_path}" "${backup_path}" || return 1
+  print_warn "Moved ${target_path} to ${backup_path}"
+  cleanup_empty_parent_dirs "${target_path}"
+}
+
+remove_app_configs() {
+  local config_name
+  local target_path
+  local rc=0
+
+  if [[ "${REMOVE_APP_CONFIGS}" != "true" ]]; then
+    print_info "App config removal skipped."
+    return 0
+  fi
+
+  if ! resolve_target_home_context; then
+    print_error "Cannot remove app configs without a resolved target home."
+    report_step_result "Removed deployed app configs" 1
+    return 1
+  fi
+
+  print_header "REMOVING DEPLOYED APP CONFIGS"
+
+  for config_name in "${MANAGED_CONFIG_DIRS[@]}"; do
+    target_path="${TARGET_HOME}/.config/${config_name}"
+    if ! move_target_home_path_to_backup "${target_path}"; then
+      rc=1
+    fi
+  done
+
+  report_step_result "Removed deployed app configs" "${rc}"
+  return "${rc}"
+}
+
+remove_shell_dotfiles() {
+  local target_file
+  local rc=0
+
+  if [[ "${REMOVE_SHELL_DOTFILES}" != "true" ]]; then
+    print_info "Shell dotfile removal skipped."
+    return 0
+  fi
+
+  if ! resolve_target_home_context; then
+    print_error "Cannot remove shell dotfiles without a resolved target home."
+    report_step_result "Removed deployed shell dotfiles" 1
+    return 1
+  fi
+
+  print_header "REMOVING DEPLOYED SHELL DOTFILES"
+
+  for target_file in "${MANAGED_HOME_FILES[@]}"; do
+    if ! move_target_home_path_to_backup "${TARGET_HOME}/${target_file}"; then
+      rc=1
+    fi
+  done
+
+  report_step_result "Removed deployed shell dotfiles" "${rc}"
+  return "${rc}"
+}
+
+remove_repo_wallpapers() {
+  local source_file
+  local wallpaper_name
+  local target_path
+  local rc=0
+
+  if [[ "${REMOVE_WALLPAPERS}" != "true" ]]; then
+    print_info "Wallpaper removal skipped."
+    return 0
+  fi
+
+  if ! resolve_target_home_context; then
+    print_error "Cannot remove wallpapers without a resolved target home."
+    report_step_result "Removed deployed wallpapers" 1
+    return 1
+  fi
+
+  print_header "REMOVING DEPLOYED WALLPAPERS"
+
+  if [[ ! -d "${SCRIPT_DIR}/images" ]]; then
+    print_info "No repo wallpaper directory found. Skipping wallpaper removal."
+    report_step_result "Removed deployed wallpapers" 0
+    return 0
+  fi
+
+  for source_file in "${SCRIPT_DIR}"/images/*; do
+    [[ -f "${source_file}" ]] || continue
+    wallpaper_name="$(basename "${source_file}")"
+    target_path="${TARGET_HOME}/Images/wallpapers/${wallpaper_name}"
+    if ! move_target_home_path_to_backup "${target_path}"; then
+      rc=1
+    fi
+  done
+
+  report_step_result "Removed deployed wallpapers" "${rc}"
+  return "${rc}"
+}
+
+remove_user_scripts() {
+  local script_target
+  local rc=0
+
+  if [[ "${REMOVE_USER_SCRIPTS}" != "true" ]]; then
+    print_info "User script removal skipped."
+    return 0
+  fi
+
+  if ! resolve_target_home_context; then
+    print_error "Cannot remove user scripts without a resolved target home."
+    report_step_result "Removed deployed user scripts" 1
+    return 1
+  fi
+
+  print_header "REMOVING DEPLOYED USER SCRIPTS"
+
+  for script_target in "${MANAGED_USER_SCRIPT_TARGETS[@]}"; do
+    if ! move_target_home_path_to_backup "${TARGET_HOME}/${script_target}"; then
+      rc=1
+    fi
+  done
+
+  report_step_result "Removed deployed user scripts" "${rc}"
+  return "${rc}"
 }
 
 # =========================
@@ -776,6 +964,18 @@ print_selection_summary() {
   print_line "Network:    ${NETWORK_CHOICE}"
   print_line "Laptop:     ${REMOVE_LAPTOP}"
   print_line "Bluetooth:  ${REMOVE_BLUETOOTH}"
+  print_line "App Configs:  ${REMOVE_APP_CONFIGS}"
+  print_line "Shell Files:  ${REMOVE_SHELL_DOTFILES}"
+  print_line "Wallpapers:   ${REMOVE_WALLPAPERS}"
+  print_line "User Scripts: ${REMOVE_USER_SCRIPTS}"
+
+  if [[ -n "${TARGET_USER}" && -n "${TARGET_HOME}" ]]; then
+    print_line "Target User: ${TARGET_USER}"
+    print_line "Target Home: ${TARGET_HOME}"
+  elif [[ "${REMOVE_APP_CONFIGS}" == "true" || "${REMOVE_SHELL_DOTFILES}" == "true" || "${REMOVE_WALLPAPERS}" == "true" || "${REMOVE_USER_SCRIPTS}" == "true" ]]; then
+    print_line ""
+    print_warn "Home-side cleanup was selected, but no target user home could be resolved."
+  fi
 
   if [[ "$NETWORK_CHOICE" == "systemd-networkd" ]]; then
     print_line ""
@@ -784,31 +984,11 @@ print_selection_summary() {
 }
 
 print_summary() {
-  print_header "FINAL SUMMARY"
+  print_standard_summary "Uninstall completed successfully." "Uninstall completed with errors." "$STATUS_USE_ASCII"
 
-  if [[ "${#PASSED_STEPS[@]}" -gt 0 ]]; then
-    print_line "${GREEN}${BOLD}Passed:${RESET}"
-    for step in "${PASSED_STEPS[@]}"; do
-      print_line "  ${GREEN}-${RESET} $step"
-    done
-  fi
-
-  if [[ "${#FAILED_STEPS[@]}" -gt 0 ]]; then
+  if [[ -n "${HOME_UNINSTALL_BACKUP_DIR}" ]]; then
     print_line ""
-    print_line "${RED}${BOLD}Failed:${RESET}"
-    for step in "${FAILED_STEPS[@]}"; do
-      print_line "  ${RED}-${RESET} $step"
-    done
-  fi
-
-  print_line ""
-
-  if [[ "${#FAILED_STEPS[@]}" -eq 0 ]]; then
-    print_ascii_success
-    print_success "Uninstall completed successfully."
-  else
-    print_ascii_error
-    print_error "Uninstall completed with errors."
+    print_info "Removed home-side files were backed up to ${HOME_UNINSTALL_BACKUP_DIR}"
   fi
 }
 
@@ -858,6 +1038,10 @@ main() {
   remove_laptop_selection
   remove_bluetooth_selection
   remove_core_selection
+  remove_app_configs
+  remove_shell_dotfiles
+  remove_repo_wallpapers
+  remove_user_scripts
 
   print_summary
   prompt_reboot

@@ -1,0 +1,5 @@
+mpv
+feh
+mousepad
+code
+fastfetch

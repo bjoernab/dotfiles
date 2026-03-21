@@ -2,138 +2,22 @@
 
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/helpers.sh
+source "$SCRIPT_DIR/scripts/helpers.sh"
+# shellcheck source=scripts/print_status.sh
+source "$SCRIPT_DIR/scripts/print_status.sh"
+
 # =========================
 # config
 # =========================
 
-CORE_PACKAGES=(
-  git
-  base-devel
-  sudo
-  curl
-  wget
-  nano
-)
-
-PIPEWIRE_PACKAGES=(
-  pipewire
-  wireplumber
-  pipewire-alsa
-  pipewire-pulse
-  pipewire-jack
-  pavucontrol
-)
-
-NETWORKMANAGER_PACKAGES=(
-  networkmanager
-)
-
-SYSTEMD_NETWORKD_PACKAGES=(
-  systemd
-)
+PACKAGE_DIR="$SCRIPT_DIR/packages"
+load_update_package_groups "$PACKAGE_DIR" || exit 1
 
 SYSTEMD_NETWORKD_SERVICES=(
   systemd-networkd
   systemd-resolved
-)
-
-NVIDIA_PROPRIETARY_PACKAGES=(
-  nvidia
-  nvidia-utils
-  nvidia-settings
-  linux-headers
-  libva
-  libva-nvidia-driver
-)
-
-NVIDIA_OPEN_PACKAGES=(
-  nvidia-open
-  nvidia-utils
-  nvidia-settings
-  linux-headers
-  libva
-  libva-nvidia-driver
-)
-
-AMD_PACKAGES=(
-  mesa
-  libva-mesa-driver
-  vulkan-radeon
-  xf86-video-amdgpu
-)
-
-INTEL_PACKAGES=(
-  mesa
-  vulkan-intel
-  intel-media-driver
-  libva-intel-driver
-)
-
-LAPTOP_PACKAGES=(
-  tlp
-  brightnessctl
-  acpi
-)
-
-BLUETOOTH_PACKAGES=(
-  bluez
-  bluez-utils
-)
-
-HYPRLAND_PACKAGES=(
-  hyprland
-  rofi
-  kitty
-  mako
-  wl-clipboard
-  grim
-  slurp
-  flameshot
-  libnotify
-  pavucontrol
-  python
-  perl
-  xdg-desktop-portal
-  xdg-desktop-portal-hyprland
-  polkit-gnome
-  hyprpaper
-  hyprlock
-  swayidle
-)
-
-HYPRLAND_AUR_PACKAGES=(
-  eww
-  wvkbd
-)
-
-FONT_PACKAGES=(
-  ttf-firacode-nerd
-  ttf-jetbrains-mono
-  ttf-nerd-fonts-symbols
-)
-
-FONT_AUR_PACKAGES=(
-  ttf-twemoji
-)
-
-APP_PACKAGES=(
-  mpv
-  feh
-  mousepad
-  code
-  fastfetch
-)
-
-FILE_MANAGER_PACKAGES=(
-  dolphin
-)
-
-SHELL_PACKAGES=(
-  zsh
-)
-
-BROWSER_PACKAGES=(
-  firefox
 )
 
 USER_DIRECTORIES=(
@@ -147,24 +31,10 @@ USER_DIRECTORIES=(
 )
 
 # =========================
-# colors
-# =========================
-
-RED="\033[1;31m"
-GREEN="\033[1;32m"
-YELLOW="\033[1;33m"
-BLUE="\033[1;34m"
-CYAN="\033[1;36m"
-BOLD="\033[1m"
-RESET="\033[0m"
-
-# =========================
 # state
 # =========================
 
-FAILED_STEPS=()
-PASSED_STEPS=()
-
+STATUS_USE_ASCII="false"
 UPDATE_MODE=""
 GPU_CHOICE="skip"
 AUDIO_CHOICE="skip"
@@ -180,97 +50,12 @@ ENSURE_ZSH_PACKAGE="false"
 SYNC_APP_CONFIGS="true"
 SYNC_SHELL_DOTFILES="true"
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$SCRIPT_DIR"
 BACKUP_DIR="$HOME/.dotfiles-update-backup-$(date +%Y%m%d-%H%M%S)"
-
-# =========================
-# ui helpers
-# =========================
-
-print_line() {
-  printf '%b\n' "${1}"
-}
-
-print_header() {
-  print_line ""
-  print_line "${CYAN}${BOLD}========================================${RESET}"
-  print_line "${CYAN}${BOLD}$1${RESET}"
-  print_line "${CYAN}${BOLD}========================================${RESET}"
-}
-
-print_info() {
-  print_line "${BLUE}[*]${RESET} $1"
-}
-
-print_warn() {
-  print_line "${YELLOW}[!]${RESET} $1"
-}
-
-print_error() {
-  print_line "${RED}[x]${RESET} $1"
-}
-
-print_success() {
-  print_line "${GREEN}[+]${RESET} $1"
-}
-
-record_pass() {
-  PASSED_STEPS+=("$1")
-}
-
-record_fail() {
-  FAILED_STEPS+=("$1")
-}
-
-report_step_result() {
-  local step_name="$1"
-  local exit_code="$2"
-
-  if [[ "$exit_code" -eq 0 ]]; then
-    print_success "${step_name}"
-    record_pass "${step_name}"
-  else
-    print_error "${step_name}"
-    record_fail "${step_name}"
-  fi
-}
 
 # =========================
 # prompt helpers
 # =========================
-
-ask_yes_no() {
-  local prompt="$1"
-  local default="$2"
-  local reply
-
-  while true; do
-    read -r -p "$prompt" reply
-    reply="${reply:-$default}"
-
-    case "${reply,,}" in
-      y|yes) return 0 ;;
-      n|no) return 1 ;;
-      *) print_warn "Please answer y or n." ;;
-    esac
-  done
-}
-
-package_is_installed() {
-  pacman -Q "$1" >/dev/null 2>&1
-}
-
-any_packages_installed() {
-  local pkg
-
-  for pkg in "$@"; do
-    if package_is_installed "$pkg"; then
-      return 0
-    fi
-  done
-
-  return 1
-}
 
 current_shell_is_zsh() {
   [[ "${SHELL##*/}" == "zsh" ]]
@@ -615,51 +400,8 @@ confirm_update() {
   exit 0
 }
 
-# =========================
-# checks
-# =========================
-
-check_not_root() {
-  [[ "${EUID}" -ne 0 ]]
-}
-
-check_arch() {
-  [[ -f /etc/arch-release ]] && command -v pacman >/dev/null 2>&1
-}
-
-check_not_chroot() {
-  if command -v systemd-detect-virt >/dev/null 2>&1; then
-    ! systemd-detect-virt --chroot >/dev/null 2>&1
-    return $?
-  fi
-
-  return 0
-}
-
 preflight_checks() {
-  print_header "PRE-FLIGHT CHECKS"
-
-  if ! check_not_root; then
-    print_error "This script must be run as a normal user, not root."
-    exit 1
-  fi
-
-  if ! check_arch; then
-    print_error "This script is intended for Arch Linux only."
-    exit 1
-  fi
-
-  if ! check_not_chroot; then
-    print_error "This script must be run after reboot, not inside arch-chroot."
-    exit 1
-  fi
-
-  if ! command -v sudo >/dev/null 2>&1; then
-    print_error "sudo is required but not installed."
-    exit 1
-  fi
-
-  print_success "Environment check passed: user session + Arch detected."
+  preflight_arch_user_postboot
 }
 
 # =========================
@@ -667,107 +409,7 @@ preflight_checks() {
 # =========================
 
 refresh_pacman() {
-  print_info "Refreshing package databases and upgrading installed packages..."
-  sudo pacman -Syu --noconfirm
-}
-
-install_package_group() {
-  local group_name="$1"
-  shift
-  local packages=("$@")
-
-  if [[ "${#packages[@]}" -eq 0 ]]; then
-    print_warn "No packages defined for ${group_name}. Skipping."
-    return 0
-  fi
-
-  print_header "INSTALLING ${group_name}"
-  print_info "Packages: ${packages[*]}"
-
-  sudo pacman -S --needed --noconfirm "${packages[@]}"
-  local rc=$?
-
-  report_step_result "Installed ${group_name}" "$rc"
-  return "$rc"
-}
-
-verify_packages_installed() {
-  local group_name="$1"
-  shift
-  local packages=("$@")
-  local missing=()
-  local pkg
-
-  for pkg in "${packages[@]}"; do
-    if ! pacman -Q "$pkg" >/dev/null 2>&1; then
-      missing+=("$pkg")
-    fi
-  done
-
-  if [[ "${#missing[@]}" -eq 0 ]]; then
-    print_success "Verified ${group_name}: all packages installed."
-    return 0
-  fi
-
-  print_error "Verification failed for ${group_name}. Missing: ${missing[*]}"
-  return 1
-}
-
-install_single_aur_package() {
-  local package_name="$1"
-
-  if pacman -Q "$package_name" >/dev/null 2>&1; then
-    print_info "AUR package already installed: ${package_name}"
-    return 0
-  fi
-
-  if ! command -v yay >/dev/null 2>&1; then
-    print_error "yay is required to install AUR package ${package_name}."
-    return 1
-  fi
-
-  yay -S --needed --noconfirm "$package_name"
-}
-
-ensure_yay_installed() {
-  local build_root repo_dir rc=0
-
-  if command -v yay >/dev/null 2>&1; then
-    print_info "yay is already installed."
-    return 0
-  fi
-
-  if ! command -v git >/dev/null 2>&1; then
-    print_error "git is required to install yay."
-    return 1
-  fi
-
-  if ! command -v makepkg >/dev/null 2>&1; then
-    print_error "makepkg is required to install yay."
-    return 1
-  fi
-
-  print_header "INSTALLING YAY"
-  print_info "Bootstrapping yay from the AUR..."
-
-  build_root="$(mktemp -d)" || return 1
-  repo_dir="${build_root}/yay"
-
-  if ! git clone --depth 1 "https://aur.archlinux.org/yay.git" "$repo_dir"; then
-    rc=1
-  elif ! (
-    cd "$repo_dir" &&
-    makepkg -si --needed --noconfirm
-  ); then
-    rc=1
-  fi
-
-  if [[ "$rc" -eq 0 ]] && ! command -v yay >/dev/null 2>&1; then
-    rc=1
-  fi
-
-  rm -rf "$build_root"
-  return "$rc"
+  refresh_pacman_full_upgrade
 }
 
 update_installed_aur_packages() {
@@ -781,32 +423,6 @@ update_installed_aur_packages() {
   local rc=$?
 
   report_step_result "Updated installed AUR packages" "$rc"
-  return "$rc"
-}
-
-install_aur_package_group() {
-  local group_name="$1"
-  shift
-  local packages=("$@")
-  local pkg
-  local rc=0
-
-  if [[ "${#packages[@]}" -eq 0 ]]; then
-    print_warn "No AUR packages defined for ${group_name}. Skipping."
-    return 0
-  fi
-
-  print_header "INSTALLING ${group_name}"
-  print_info "Packages: ${packages[*]}"
-
-  for pkg in "${packages[@]}"; do
-    print_info "Installing AUR package: ${pkg}"
-    if ! install_single_aur_package "$pkg"; then
-      rc=1
-    fi
-  done
-
-  report_step_result "Installed ${group_name}" "$rc"
   return "$rc"
 }
 
@@ -1000,17 +616,29 @@ deploy_wallpapers() {
 
 deploy_user_scripts() {
   local rc=0
-  local source_file="$REPO_DIR/home/Scripts/Lock/idle.sh"
-  local target_file="$HOME/Scripts/Lock/idle.sh"
+  local source_files=(
+    "$REPO_DIR/home/Scripts/Lock/idle.sh"
+    "$REPO_DIR/home/Scripts/Lock/lock-now.sh"
+  )
+  local target_files=(
+    "$HOME/Scripts/Lock/idle.sh"
+    "$HOME/Scripts/Lock/lock-now.sh"
+  )
+  local i
 
   print_header "DEPLOYING USER SCRIPTS"
 
-  if ! copy_home_file "$source_file" "$target_file"; then
-    rc=1
-  elif ! chmod +x "$target_file"; then
-    print_error "Failed to make script executable: $target_file"
-    rc=1
-  fi
+  for i in "${!source_files[@]}"; do
+    if ! copy_home_file "${source_files[$i]}" "${target_files[$i]}"; then
+      rc=1
+      continue
+    fi
+
+    if ! chmod +x "${target_files[$i]}"; then
+      print_error "Failed to make script executable: ${target_files[$i]}"
+      rc=1
+    fi
+  done
 
   report_step_result "Deployed user scripts" "$rc"
   return "$rc"
@@ -1133,52 +761,88 @@ deploy_configs() {
   if [[ "$SYNC_APP_CONFIGS" == "true" ]]; then
     mkdir -p "$HOME/.config" || rc=1
 
-    if copy_config_dir "$REPO_DIR/configs/hypr" "$HOME/.config/hypr"; then
-      copied_any=1
+    if package_is_installed "hyprland"; then
+      if copy_config_dir "$REPO_DIR/configs/hypr" "$HOME/.config/hypr"; then
+        copied_any=1
+      else
+        rc=1
+      fi
     else
-      rc=1
+      print_info "Skipping Hypr config because hyprland is not installed."
     fi
 
-    if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
-      copied_any=1
+    if package_is_installed "eww"; then
+      if package_is_installed "networkmanager" && any_packages_installed "${PIPEWIRE_PACKAGES[@]}" && command -v nmcli >/dev/null 2>&1 && command -v pactl >/dev/null 2>&1; then
+        if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
+          copied_any=1
+        else
+          rc=1
+        fi
+      else
+        print_warn "Skipping Eww config because it expects NetworkManager and PipeWire to be available."
+      fi
     else
-      rc=1
+      print_info "Skipping Eww config because eww is not installed."
     fi
 
-    if copy_config_dir "$REPO_DIR/configs/rofi" "$HOME/.config/rofi"; then
-      copied_any=1
+    if package_is_installed "rofi"; then
+      if copy_config_dir "$REPO_DIR/configs/rofi" "$HOME/.config/rofi"; then
+        copied_any=1
+      else
+        rc=1
+      fi
     else
-      rc=1
+      print_info "Skipping Rofi config because rofi is not installed."
     fi
 
-    if copy_config_dir "$REPO_DIR/configs/kitty" "$HOME/.config/kitty"; then
-      copied_any=1
+    if package_is_installed "kitty"; then
+      if copy_config_dir "$REPO_DIR/configs/kitty" "$HOME/.config/kitty"; then
+        copied_any=1
+      else
+        rc=1
+      fi
     else
-      rc=1
+      print_info "Skipping Kitty config because kitty is not installed."
     fi
 
-    if copy_config_dir "$REPO_DIR/configs/mako" "$HOME/.config/mako"; then
-      copied_any=1
+    if package_is_installed "mako"; then
+      if copy_config_dir "$REPO_DIR/configs/mako" "$HOME/.config/mako"; then
+        copied_any=1
+      else
+        rc=1
+      fi
     else
-      rc=1
+      print_info "Skipping Mako config because mako is not installed."
     fi
 
-    if copy_config_dir "$REPO_DIR/configs/fastfetch" "$HOME/.config/fastfetch"; then
-      copied_any=1
+    if package_is_installed "fastfetch"; then
+      if copy_config_dir "$REPO_DIR/configs/fastfetch" "$HOME/.config/fastfetch"; then
+        copied_any=1
+      else
+        rc=1
+      fi
     else
-      rc=1
+      print_info "Skipping Fastfetch config because fastfetch is not installed."
     fi
 
-    if copy_config_dir "$REPO_DIR/configs/hyprpaper" "$HOME/.config/hyprpaper"; then
-      copied_any=1
+    if package_is_installed "hyprpaper"; then
+      if copy_config_dir "$REPO_DIR/configs/hyprpaper" "$HOME/.config/hyprpaper"; then
+        copied_any=1
+      else
+        rc=1
+      fi
     else
-      rc=1
+      print_info "Skipping Hyprpaper config because hyprpaper is not installed."
     fi
 
-    if copy_config_dir "$REPO_DIR/configs/hyprlock" "$HOME/.config/hyprlock"; then
-      copied_any=1
+    if package_is_installed "hyprlock"; then
+      if copy_config_dir "$REPO_DIR/configs/hyprlock" "$HOME/.config/hyprlock"; then
+        copied_any=1
+      else
+        rc=1
+      fi
     else
-      rc=1
+      print_info "Skipping Hyprlock config because hyprlock is not installed."
     fi
   else
     print_info "~/.config deployment skipped."
@@ -1381,30 +1045,7 @@ print_selection_summary() {
 }
 
 print_summary() {
-  print_header "FINAL SUMMARY"
-
-  if [[ "${#PASSED_STEPS[@]}" -gt 0 ]]; then
-    print_line "${GREEN}${BOLD}Passed:${RESET}"
-    for step in "${PASSED_STEPS[@]}"; do
-      print_line "  ${GREEN}-${RESET} $step"
-    done
-  fi
-
-  if [[ "${#FAILED_STEPS[@]}" -gt 0 ]]; then
-    print_line ""
-    print_line "${RED}${BOLD}Failed:${RESET}"
-    for step in "${FAILED_STEPS[@]}"; do
-      print_line "  ${RED}-${RESET} $step"
-    done
-  fi
-
-  print_line ""
-
-  if [[ "${#FAILED_STEPS[@]}" -eq 0 ]]; then
-    print_success "Update completed successfully."
-  else
-    print_error "Update completed with errors."
-  fi
+  print_standard_summary "Update completed successfully." "Update completed with errors."
 }
 
 # =========================

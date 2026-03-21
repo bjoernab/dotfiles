@@ -1,0 +1,3 @@
+ttf-firacode-nerd
+ttf-jetbrains-mono
+ttf-nerd-fonts-symbols
