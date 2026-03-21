@@ -388,7 +388,7 @@ confirm_uninstall() {
 }
 
 preflight_checks() {
-  preflight_arch_root_chroot
+  preflight_arch_root_any
 }
 
 # =========================
@@ -1009,7 +1009,7 @@ prompt_reboot() {
 # =========================
 
 main() {
-  print_header "ARCH CHROOT UNINSTALL"
+  print_header "DOTFILES UNINSTALL"
 
   preflight_checks
   select_uninstall_mode

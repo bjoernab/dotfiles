@@ -88,6 +88,10 @@ check_not_chroot() {
   ! detect_chroot
 }
 
+check_archiso_live_environment() {
+  [[ -d /run/archiso ]] || [[ -f /etc/archiso-release ]]
+}
+
 preflight_arch_root_chroot() {
   print_header "PRE-FLIGHT CHECKS"
 
@@ -107,6 +111,29 @@ preflight_arch_root_chroot() {
   fi
 
   print_success "Environment check passed: Arch + root + chroot detected."
+}
+
+preflight_arch_root_any() {
+  print_header "PRE-FLIGHT CHECKS"
+
+  if ! check_root; then
+    print_error "This script must be run as root."
+    exit 1
+  fi
+
+  if ! check_arch; then
+    print_error "This script is intended for Arch Linux only."
+    exit 1
+  fi
+
+  if check_chroot; then
+    print_success "Environment check passed: Arch + root + chroot detected."
+  elif check_archiso_live_environment; then
+    print_error "Run this script inside arch-chroot or from the installed Arch system, not directly from the live ISO."
+    exit 1
+  else
+    print_success "Environment check passed: Arch + root detected."
+  fi
 }
 
 preflight_arch_user_postboot() {

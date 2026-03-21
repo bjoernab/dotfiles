@@ -25,6 +25,8 @@ AUDIO_CHOICE=""
 NETWORK_CHOICE=""
 INSTALL_LAPTOP="false"
 INSTALL_BLUETOOTH="false"
+INSTALL_STATE_DIR="/var/lib/dotfiles"
+INSTALL_STATE_FILE="${INSTALL_STATE_DIR}/install-state"
 
 # =========================
 # prompt helpers
@@ -355,6 +357,27 @@ print_summary() {
   print_standard_summary "Bootstrap completed successfully." "Bootstrap completed with errors." "$STATUS_USE_ASCII"
 }
 
+write_install_state() {
+  local status="success"
+
+  if [[ "${#FAILED_STEPS[@]}" -ne 0 ]]; then
+    status="errors"
+  fi
+
+  mkdir -p "${INSTALL_STATE_DIR}" || return 1
+
+  cat > "${INSTALL_STATE_FILE}" <<EOF
+status=${status}
+timestamp=$(date -Iseconds)
+gpu=${GPU_CHOICE}
+audio=${AUDIO_CHOICE}
+network=${NETWORK_CHOICE}
+laptop=${INSTALL_LAPTOP}
+bluetooth=${INSTALL_BLUETOOTH}
+failed_steps=${#FAILED_STEPS[@]}
+EOF
+}
+
 prompt_reboot() {
   print_line ""
   read -r -p "Press Y to reboot now, or any other key to stay in chroot: " reboot_choice
@@ -400,6 +423,9 @@ main() {
 
   enable_bluetooth_service
   verify_bluetooth_service || record_fail "Verified bluetooth service"
+
+  write_install_state
+  report_step_result "Wrote install state" "$?"
 
   print_summary
   prompt_reboot
