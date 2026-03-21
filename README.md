@@ -33,19 +33,30 @@ Current managed components include:
 - Zsh
 - Optional apps such as Dolphin, Firefox, mpv, feh, mousepad, and VS Code
 
-## Recommended Flow
+## Install Paths
 
-### One-Command Bootstrap
+Choose one of these two routes:
 
-If you want a single entrypoint, use `bootstrap.sh`.
+- Route A: use `bootstrap.sh` as the single entrypoint
+- Route B: run `install.sh` and `setup.sh` manually
+
+### Route A: One-Command Bootstrap
+
+This is the simpler route.
 
 Inside `arch-chroot` as `root`, it will install `git` if needed, clone the repo if needed, and run `install.sh`.
 
-After reboot, run the same bootstrap command as your normal user. It will verify that the install phase completed, clone the repo if needed, and then run `setup.sh`.
+After reboot, run the same bootstrap command again as your normal user. It will verify that the install phase completed, clone the repo if needed, and then run `setup.sh`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bjoernab/dotfiles/main/bootstrap.sh | bash
 ```
+
+---
+
+### Route B: Manual Install + Setup
+
+Use this route if you want to run each phase yourself.
 
 ### 1. Install Arch Linux
 
@@ -83,6 +94,10 @@ cd ~/dotfiles
 Run this as your normal user, not as `root`, and not inside `arch-chroot`.
 
 `setup.sh` is the phase-2 post-boot setup. It is also interactive and prompts for optional pieces like Dolphin, Firefox, extra apps, config deployment, and shell setup. It then installs the desktop packages, bootstraps `yay` if needed, creates user directories, and deploys the managed configs, wallpapers, and user scripts.
+
+---
+
+## After Installation
 
 ### 4. Use `update.sh` later to keep things in sync
 
