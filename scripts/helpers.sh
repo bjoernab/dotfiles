@@ -12,16 +12,122 @@ BLUE="\033[1;34m"
 CYAN="\033[1;36m"
 BOLD="\033[1m"
 RESET="\033[0m"
+DOTFILES_UI_WIDTH="${DOTFILES_UI_WIDTH:-72}"
 
 print_line() {
   printf '%b\n' "${1}"
 }
 
+repeat_char() {
+  local char="$1"
+  local count="$2"
+  local output=""
+
+  while (( count > 0 )); do
+    output+="$char"
+    ((count--))
+  done
+
+  printf '%s' "${output}"
+}
+
 print_header() {
+  local title="$1"
+  local width="${2:-$DOTFILES_UI_WIDTH}"
+  local border content
+
+  border="+$(repeat_char "=" "$((width - 2))")+"
+  printf -v content "| %-*s |" "$((width - 4))" "${title}"
+
   print_line ""
-  print_line "${CYAN}${BOLD}========================================${RESET}"
-  print_line "${CYAN}${BOLD}$1${RESET}"
-  print_line "${CYAN}${BOLD}========================================${RESET}"
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+  print_line "${CYAN}${BOLD}${content}${RESET}"
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+}
+
+print_ascii_wordmark() {
+  case "$1" in
+    bootstrap)
+      cat <<'EOF'
+ ____              _       _                 
+| __ )  ___   ___ | |_ ___| |_ _ __ __ _ _ __
+|  _ \ / _ \ / _ \| __/ __| __| '__/ _` | '_ \
+| |_) | (_) | (_) | |_\__ \ |_| | | (_| | |_) |
+|____/ \___/ \___/ \__|___/\__|_|  \__,_| .__/
+                                        |_|   
+EOF
+      ;;
+    install)
+      cat <<'EOF'
+ ___           _        _ _
+|_ _|_ __  ___| |_ __ _| | |
+ | || '_ \/ __| __/ _` | | |
+ | || | | \__ \ || (_| | | |
+|___|_| |_|___/\__\__,_|_|_|
+EOF
+      ;;
+    setup)
+      cat <<'EOF'
+ ____       _
+/ ___|  ___| |_ _   _ _ __
+\___ \ / _ \ __| | | | '_ \
+ ___) |  __/ |_| |_| | |_) |
+|____/ \___|\__|\__,_| .__/
+                     |_|
+EOF
+      ;;
+    *)
+      printf '%s\n' "$1"
+      ;;
+  esac
+}
+
+print_script_banner() {
+  local script_name="$1"
+  local subtitle="${2:-}"
+  local width="${3:-$DOTFILES_UI_WIDTH}"
+  local border subtitle_line
+
+  border="+$(repeat_char "=" "$((width - 2))")+"
+
+  print_line ""
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+  printf '%b' "${CYAN}${BOLD}"
+  print_ascii_wordmark "${script_name}"
+  printf '%b' "${RESET}"
+
+  if [[ -n "${subtitle}" ]]; then
+    printf -v subtitle_line "| %-*s |" "$((width - 4))" "${subtitle}"
+    print_line "${BLUE}${subtitle_line}${RESET}"
+  fi
+
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+}
+
+print_key_value_box() {
+  local title="$1"
+  shift
+  local width="${DOTFILES_UI_WIDTH}"
+  local border title_line row label value
+
+  border="+$(repeat_char "-" "$((width - 2))")+"
+  printf -v title_line "| %-*s |" "$((width - 4))" "${title}"
+
+  print_line ""
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+  print_line "${CYAN}${BOLD}${title_line}${RESET}"
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+
+  while [[ "$#" -ge 2 ]]; do
+    label="$1"
+    value="$2"
+    shift 2
+
+    printf -v row "| %-16s : %-*s |" "$label" "$((width - 23))" "$value"
+    print_line "${BLUE}${row}${RESET}"
+  done
+
+  print_line "${CYAN}${BOLD}${border}${RESET}"
 }
 
 print_info() {

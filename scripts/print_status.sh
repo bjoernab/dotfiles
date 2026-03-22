@@ -28,6 +28,10 @@ EOF
   print_line "${RESET}"
 }
 
+print_ascii_success_stamp() {
+  print_line "${GREEN}${BOLD} .-=-=-=-=-=-=-=-=-=-=-[  OK  ]-=-=-=-=-=-=-=-=-=-=-.${RESET}"
+}
+
 print_ascii_error() {
   print_line "${RED}${BOLD}"
   cat <<'EOF'
@@ -39,6 +43,10 @@ print_ascii_error() {
 |______|_|  \_\_|  \_\\____/|_|  \_\
 EOF
   print_line "${RESET}"
+}
+
+print_ascii_error_stamp() {
+  print_line "${RED}${BOLD} .-=-=-=-=-=-=-=-=-=-=[ FAIL ]-=-=-=-=-=-=-=-=-=-=-.${RESET}"
 }
 
 record_pass() {
@@ -55,13 +63,13 @@ report_step_result() {
 
   if [[ "$exit_code" -eq 0 ]]; then
     if [[ "${STATUS_USE_ASCII}" == "true" ]]; then
-      print_ascii_success
+      print_ascii_success_stamp
     fi
     print_success "${step_name}"
     record_pass "${step_name}"
   else
     if [[ "${STATUS_USE_ASCII}" == "true" ]]; then
-      print_ascii_error
+      print_ascii_error_stamp
     fi
     print_error "${step_name}"
     record_fail "${step_name}"

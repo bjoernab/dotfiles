@@ -14,6 +14,7 @@ BLUE="\033[1;34m"
 CYAN="\033[1;36m"
 BOLD="\033[1m"
 RESET="\033[0m"
+UI_WIDTH="${UI_WIDTH:-72}"
 
 REPO_DIR=""
 
@@ -21,11 +22,77 @@ print_line() {
   printf '%b\n' "$1"
 }
 
+repeat_char() {
+  local char="$1"
+  local count="$2"
+  local output=""
+
+  while (( count > 0 )); do
+    output+="$char"
+    ((count--))
+  done
+
+  printf '%s' "${output}"
+}
+
 print_header() {
+  local title="$1"
+  local width="${2:-$UI_WIDTH}"
+  local border content
+
+  border="+$(repeat_char "=" "$((width - 2))")+"
+  printf -v content "| %-*s |" "$((width - 4))" "${title}"
+
   print_line ""
-  print_line "${CYAN}${BOLD}========================================${RESET}"
-  print_line "${CYAN}${BOLD}$1${RESET}"
-  print_line "${CYAN}${BOLD}========================================${RESET}"
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+  print_line "${CYAN}${BOLD}${content}${RESET}"
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+}
+
+print_ascii_bootstrap() {
+  cat <<'EOF'
+ ____              _       _                 
+| __ )  ___   ___ | |_ ___| |_ _ __ __ _ _ __
+|  _ \ / _ \ / _ \| __/ __| __| '__/ _` | '_ \
+| |_) | (_) | (_) | |_\__ \ |_| | | (_| | |_) |
+|____/ \___/ \___/ \__|___/\__|_|  \__,_| .__/
+                                        |_|   
+EOF
+}
+
+print_banner() {
+  local border subtitle
+
+  border="+$(repeat_char "=" "$((UI_WIDTH - 2))")+"
+  printf -v subtitle "| %-*s |" "$((UI_WIDTH - 4))" "bootstrap.sh decides whether to run install.sh or setup.sh"
+
+  print_line ""
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+  printf '%b' "${CYAN}${BOLD}"
+  print_ascii_bootstrap
+  printf '%b' "${RESET}"
+  print_line "${BLUE}${subtitle}${RESET}"
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+}
+
+print_execution_map() {
+  local border title_line row
+
+  border="+$(repeat_char "-" "$((UI_WIDTH - 2))")+"
+  printf -v title_line "| %-*s |" "$((UI_WIDTH - 4))" "BOOTSTRAP FLOW"
+
+  print_line ""
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+  print_line "${CYAN}${BOLD}${title_line}${RESET}"
+  print_line "${CYAN}${BOLD}${border}${RESET}"
+
+  printf -v row "| %-24s -> %-40s |" "arch-chroot + root" "install.sh"
+  print_line "${BLUE}${row}${RESET}"
+
+  printf -v row "| %-24s -> %-40s |" "post-boot + user" "setup.sh"
+  print_line "${BLUE}${row}${RESET}"
+
+  print_line "${CYAN}${BOLD}${border}${RESET}"
 }
 
 print_info() {
@@ -240,7 +307,8 @@ run_setup_phase() {
 }
 
 main() {
-  print_header "DOTFILES BOOTSTRAP"
+  print_banner
+  print_execution_map
 
   if ! check_arch; then
     print_error "This bootstrap script is intended for Arch Linux only."

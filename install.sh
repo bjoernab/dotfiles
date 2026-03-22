@@ -345,16 +345,17 @@ install_bluetooth_selection() {
 # =========================
 
 print_selection_summary() {
-  print_header "SELECTED OPTIONS"
-  print_line "GPU:        ${GPU_CHOICE}"
-  print_line "Audio:      ${AUDIO_CHOICE}"
-  print_line "Network:    ${NETWORK_CHOICE}"
-  print_line "Laptop:     ${INSTALL_LAPTOP}"
-  print_line "Bluetooth:  ${INSTALL_BLUETOOTH}"
+  print_key_value_box \
+    "SELECTED OPTIONS" \
+    "GPU" "${GPU_CHOICE}" \
+    "Audio" "${AUDIO_CHOICE}" \
+    "Network" "${NETWORK_CHOICE}" \
+    "Laptop" "${INSTALL_LAPTOP}" \
+    "Bluetooth" "${INSTALL_BLUETOOTH}"
 }
 
 print_summary() {
-  print_standard_summary "Bootstrap completed successfully." "Bootstrap completed with errors." "$STATUS_USE_ASCII"
+  print_standard_summary "Install completed successfully." "Install completed with errors." "$STATUS_USE_ASCII"
 }
 
 write_install_state() {
@@ -395,7 +396,7 @@ prompt_reboot() {
 # =========================
 
 main() {
-  print_header "ARCH CHROOT BOOTSTRAP"
+  print_script_banner "install" "Arch chroot packages, drivers, and services"
 
   preflight_checks
   prompt_user_choices

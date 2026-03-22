@@ -29,7 +29,7 @@ USER_DIRECTORIES=(
 # state
 # =========================
 
-STATUS_USE_ASCII="false"
+STATUS_USE_ASCII="true"
 INSTALL_FILE_MANAGER="true"
 INSTALL_BROWSER="false"
 COPY_CONFIGS="true"
@@ -98,6 +98,17 @@ prompt_user_choices() {
 
 preflight_checks() {
   preflight_arch_user_postboot
+}
+
+print_selection_summary() {
+  print_key_value_box \
+    "SELECTED OPTIONS" \
+    "File manager" "${INSTALL_FILE_MANAGER}" \
+    "Browser" "${INSTALL_BROWSER}" \
+    "Extra apps" "${INSTALL_EXTRA_APPS}" \
+    "Copy configs" "${COPY_CONFIGS}" \
+    "Copy shell rc" "${COPY_SHELL_DOTFILES}" \
+    "Default zsh" "${SET_ZSH_DEFAULT}"
 }
 
 # =========================
@@ -497,7 +508,7 @@ install_and_set_zsh() {
 # =========================
 
 print_summary() {
-  print_standard_summary "Setup completed successfully." "Setup completed with errors."
+  print_standard_summary "Setup completed successfully." "Setup completed with errors." "$STATUS_USE_ASCII"
 }
 
 abort_setup() {
@@ -511,10 +522,11 @@ abort_setup() {
 # =========================
 
 main() {
-  print_header "POST-BOOT HYPRLAND SETUP"
+  print_script_banner "setup" "Post-boot Hyprland packages, configs, and shell setup"
 
   preflight_checks
   prompt_user_choices
+  print_selection_summary
 
   refresh_pacman || {
     print_error "Failed to refresh pacman databases."
