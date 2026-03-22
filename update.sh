@@ -3,6 +3,37 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_UPDATE_SKIP_REMOTE_SYNC="${DOTFILES_UPDATE_SKIP_REMOTE_SYNC:-false}"
+DOTFILES_UPDATE_REEXECED="${DOTFILES_UPDATE_REEXECED:-false}"
+
+for arg in "$@"; do
+  if [[ "$arg" == "--no-pull" || "$arg" == "--help" || "$arg" == "-h" ]]; then
+    DOTFILES_UPDATE_SKIP_REMOTE_SYNC="true"
+    break
+  fi
+done
+
+if [[ "${DOTFILES_UPDATE_SKIP_REMOTE_SYNC}" != "true" && "${DOTFILES_UPDATE_REEXECED}" != "true" ]] && command -v git >/dev/null 2>&1 && [[ -d "${SCRIPT_DIR}/.git" ]]; then
+  if git -C "${SCRIPT_DIR}" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+    if git -C "${SCRIPT_DIR}" diff --quiet --ignore-submodules -- && git -C "${SCRIPT_DIR}" diff --cached --quiet --ignore-submodules --; then
+      current_head="$(git -C "${SCRIPT_DIR}" rev-parse HEAD 2>/dev/null || true)"
+
+      if git -C "${SCRIPT_DIR}" pull --ff-only --quiet; then
+        new_head="$(git -C "${SCRIPT_DIR}" rev-parse HEAD 2>/dev/null || true)"
+
+        if [[ -n "${current_head}" && -n "${new_head}" && "${current_head}" != "${new_head}" ]]; then
+          export DOTFILES_UPDATE_REEXECED="true"
+          exec bash "${SCRIPT_DIR}/update.sh" "$@"
+        fi
+      else
+        printf '%s\n' "warning: unable to fast-forward the dotfiles repo; continuing with the current checkout." >&2
+      fi
+    else
+      printf '%s\n' "warning: dotfiles repo has local changes; skipping automatic git pull." >&2
+    fi
+  fi
+fi
+
 # shellcheck source=scripts/helpers.sh
 source "$SCRIPT_DIR/scripts/helpers.sh"
 # shellcheck source=scripts/print_status.sh
@@ -34,8 +65,8 @@ USER_DIRECTORIES=(
 # state
 # =========================
 
-STATUS_USE_ASCII="false"
-UPDATE_MODE=""
+STATUS_USE_ASCII="true"
+UPDATE_MODE="live"
 GPU_CHOICE="skip"
 AUDIO_CHOICE="skip"
 NETWORK_CHOICE="skip"
@@ -52,6 +83,9 @@ SYNC_SHELL_DOTFILES="true"
 
 REPO_DIR="$SCRIPT_DIR"
 BACKUP_DIR="$HOME/.dotfiles-update-backup-$(date +%Y%m%d-%H%M%S)"
+DOTFILES_INSTALL_STATE_FILE="${DOTFILES_INSTALL_STATE_FILE:-/var/lib/dotfiles/install-state}"
+DOTFILES_UPDATE_STATE_DIR="${DOTFILES_UPDATE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles}"
+DOTFILES_UPDATE_STATE_FILE="${DOTFILES_UPDATE_STATE_FILE:-${DOTFILES_UPDATE_STATE_DIR}/update-state}"
 
 # =========================
 # prompt helpers
@@ -61,36 +95,42 @@ current_shell_is_zsh() {
   [[ "${SHELL##*/}" == "zsh" ]]
 }
 
-select_update_mode() {
-  print_header "UPDATE MODE"
-  print_line "A) Update everything managed by these dotfiles (auto detect)"
-  print_line "B) Interactive update flow"
-  print_line "C) Return without doing anything"
-  print_line ""
+print_usage() {
+  cat <<'EOF'
+Usage: ./update.sh [--interactive] [--no-pull] [--help]
 
-  while true; do
-    read -r -p "Choose mode [A/B/C] (default: A): " choice
-    choice="${choice:-A}"
+Default mode:
+  Runs a one-click live sync for machines that already use these dotfiles.
+  It fast-forwards the repo when possible, upgrades packages, and re-syncs
+  the managed configs and home files without prompting.
 
-    case "${choice^^}" in
-      A|1)
-        UPDATE_MODE="auto"
-        print_success "Selected mode: auto-detect update."
-        break
-        ;;
-      B|2)
+Options:
+  --interactive  Choose update components manually before proceeding
+  --no-pull      Skip the automatic git pull of this repo before updating
+  --help         Show this help text
+EOF
+}
+
+parse_args() {
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --interactive)
         UPDATE_MODE="interactive"
-        print_success "Selected mode: interactive update."
-        break
         ;;
-      C|3)
-        print_info "Returning without making changes."
+      --no-pull)
+        ;;
+      --help|-h)
+        print_usage
         exit 0
         ;;
       *)
-        print_warn "Invalid choice. Enter A, B, or C."
+        print_error "Unknown option: $1"
+        print_usage
+        exit 1
         ;;
     esac
+
+    shift
   done
 }
 
@@ -177,6 +217,181 @@ auto_detect_selections() {
   SYNC_SHELL_DOTFILES="true"
   print_info "Sync app configs: ${SYNC_APP_CONFIGS}"
   print_info "Sync shell dotfiles: ${SYNC_SHELL_DOTFILES}"
+}
+
+read_state_value() {
+  local file_path="$1"
+  local key="$2"
+
+  [[ -f "${file_path}" ]] || return 1
+  sed -n "s/^${key}=//p" "${file_path}" | head -n 1
+}
+
+set_choice_if_allowed() {
+  local variable_name="$1"
+  local value="$2"
+  shift 2
+  local allowed
+
+  for allowed in "$@"; do
+    if [[ "${value}" == "${allowed}" ]]; then
+      printf -v "${variable_name}" '%s' "${value}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+set_bool_if_allowed() {
+  local variable_name="$1"
+  local value="$2"
+
+  case "${value}" in
+    true|false)
+      printf -v "${variable_name}" '%s' "${value}"
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+load_install_state_selections() {
+  local install_status
+  local loaded_any="false"
+  local value
+
+  [[ -f "${DOTFILES_INSTALL_STATE_FILE}" ]] || return 1
+
+  install_status="$(read_state_value "${DOTFILES_INSTALL_STATE_FILE}" "status" || true)"
+  if [[ -z "${install_status}" ]]; then
+    return 1
+  fi
+
+  value="$(read_state_value "${DOTFILES_INSTALL_STATE_FILE}" "gpu" || true)"
+  if set_choice_if_allowed GPU_CHOICE "${value}" "skip" "nvidia-proprietary" "nvidia-open" "amd" "intel"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_INSTALL_STATE_FILE}" "audio" || true)"
+  if set_choice_if_allowed AUDIO_CHOICE "${value}" "skip" "pipewire"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_INSTALL_STATE_FILE}" "network" || true)"
+  if set_choice_if_allowed NETWORK_CHOICE "${value}" "skip" "networkmanager" "systemd-networkd"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_INSTALL_STATE_FILE}" "laptop" || true)"
+  if set_bool_if_allowed UPDATE_LAPTOP "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_INSTALL_STATE_FILE}" "bluetooth" || true)"
+  if set_bool_if_allowed UPDATE_BLUETOOTH "${value}"; then
+    loaded_any="true"
+  fi
+
+  if [[ "${loaded_any}" == "true" ]]; then
+    print_info "Loaded base selections from ${DOTFILES_INSTALL_STATE_FILE} (${install_status})."
+    return 0
+  fi
+
+  return 1
+}
+
+load_update_state_selections() {
+  local update_status
+  local loaded_any="false"
+  local value
+
+  [[ -f "${DOTFILES_UPDATE_STATE_FILE}" ]] || return 1
+
+  update_status="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "status" || true)"
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "gpu" || true)"
+  if set_choice_if_allowed GPU_CHOICE "${value}" "skip" "nvidia-proprietary" "nvidia-open" "amd" "intel"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "audio" || true)"
+  if set_choice_if_allowed AUDIO_CHOICE "${value}" "skip" "pipewire"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "network" || true)"
+  if set_choice_if_allowed NETWORK_CHOICE "${value}" "skip" "networkmanager" "systemd-networkd"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "laptop" || true)"
+  if set_bool_if_allowed UPDATE_LAPTOP "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "bluetooth" || true)"
+  if set_bool_if_allowed UPDATE_BLUETOOTH "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "hyprland" || true)"
+  if set_bool_if_allowed MANAGE_HYPRLAND "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "fonts" || true)"
+  if set_bool_if_allowed MANAGE_FONTS "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "file_manager" || true)"
+  if set_bool_if_allowed UPDATE_FILE_MANAGER "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "browser" || true)"
+  if set_bool_if_allowed UPDATE_BROWSER "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "extra_apps" || true)"
+  if set_bool_if_allowed UPDATE_EXTRA_APPS "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "ensure_zsh_package" || true)"
+  if set_bool_if_allowed ENSURE_ZSH_PACKAGE "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "sync_app_configs" || true)"
+  if set_bool_if_allowed SYNC_APP_CONFIGS "${value}"; then
+    loaded_any="true"
+  fi
+
+  value="$(read_state_value "${DOTFILES_UPDATE_STATE_FILE}" "sync_shell_dotfiles" || true)"
+  if set_bool_if_allowed SYNC_SHELL_DOTFILES "${value}"; then
+    loaded_any="true"
+  fi
+
+  if [[ "${loaded_any}" == "true" ]]; then
+    if [[ -n "${update_status}" ]]; then
+      print_info "Loaded saved live selections from ${DOTFILES_UPDATE_STATE_FILE} (${update_status})."
+    else
+      print_info "Loaded saved live selections from ${DOTFILES_UPDATE_STATE_FILE}."
+    fi
+    return 0
+  fi
+
+  return 1
+}
+
+prepare_live_selections() {
+  auto_detect_selections
+  load_install_state_selections || true
+  load_update_state_selections || true
 }
 
 gpu_choice_default_number() {
@@ -747,6 +962,22 @@ copy_home_file() {
   render_placeholders_in_file "$target_file"
 }
 
+eww_runtime_available() {
+  command -v eww >/dev/null 2>&1 || any_packages_installed "eww" "eww-wayland"
+}
+
+deploy_eww_config() {
+  if ! eww_runtime_available; then
+    print_warn "Eww is not installed yet. Copying the config anyway so the bar is ready after a later install."
+  fi
+
+  if ! package_is_installed "networkmanager" || ! any_packages_installed "${PIPEWIRE_PACKAGES[@]}" || ! command -v nmcli >/dev/null 2>&1 || ! command -v pactl >/dev/null 2>&1; then
+    print_warn "Eww expects NetworkManager and PipeWire tools. Copying the config anyway so the setup stays in sync."
+  fi
+
+  copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"
+}
+
 deploy_configs() {
   local rc=0
   local copied_any=0
@@ -771,18 +1002,10 @@ deploy_configs() {
       print_info "Skipping Hypr config because hyprland is not installed."
     fi
 
-    if package_is_installed "eww"; then
-      if package_is_installed "networkmanager" && any_packages_installed "${PIPEWIRE_PACKAGES[@]}" && command -v nmcli >/dev/null 2>&1 && command -v pactl >/dev/null 2>&1; then
-        if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
-          copied_any=1
-        else
-          rc=1
-        fi
-      else
-        print_warn "Skipping Eww config because it expects NetworkManager and PipeWire to be available."
-      fi
+    if deploy_eww_config; then
+      copied_any=1
     else
-      print_info "Skipping Eww config because eww is not installed."
+      rc=1
     fi
 
     if package_is_installed "rofi"; then
@@ -1027,25 +1250,55 @@ update_zsh_selection() {
 # =========================
 
 print_selection_summary() {
-  print_header "SELECTED OPTIONS"
-  print_line "Mode:               ${UPDATE_MODE}"
-  print_line "GPU:                ${GPU_CHOICE}"
-  print_line "Audio:              ${AUDIO_CHOICE}"
-  print_line "Network:            ${NETWORK_CHOICE}"
-  print_line "Laptop:             ${UPDATE_LAPTOP}"
-  print_line "Bluetooth:          ${UPDATE_BLUETOOTH}"
-  print_line "Hyprland stack:     ${MANAGE_HYPRLAND}"
-  print_line "Fonts:              ${MANAGE_FONTS}"
-  print_line "File manager:       ${UPDATE_FILE_MANAGER}"
-  print_line "Browser:            ${UPDATE_BROWSER}"
-  print_line "Extra apps:         ${UPDATE_EXTRA_APPS}"
-  print_line "Ensure zsh package: ${ENSURE_ZSH_PACKAGE}"
-  print_line "Sync app configs:   ${SYNC_APP_CONFIGS}"
-  print_line "Sync shell files:   ${SYNC_SHELL_DOTFILES}"
+  print_key_value_box \
+    "SELECTED OPTIONS" \
+    "Mode" "${UPDATE_MODE}" \
+    "GPU" "${GPU_CHOICE}" \
+    "Audio" "${AUDIO_CHOICE}" \
+    "Network" "${NETWORK_CHOICE}" \
+    "Laptop" "${UPDATE_LAPTOP}" \
+    "Bluetooth" "${UPDATE_BLUETOOTH}" \
+    "Hyprland" "${MANAGE_HYPRLAND}" \
+    "Fonts" "${MANAGE_FONTS}" \
+    "File manager" "${UPDATE_FILE_MANAGER}" \
+    "Browser" "${UPDATE_BROWSER}" \
+    "Extra apps" "${UPDATE_EXTRA_APPS}" \
+    "Ensure zsh" "${ENSURE_ZSH_PACKAGE}" \
+    "Sync app cfgs" "${SYNC_APP_CONFIGS}" \
+    "Sync shell rc" "${SYNC_SHELL_DOTFILES}"
 }
 
 print_summary() {
-  print_standard_summary "Update completed successfully." "Update completed with errors."
+  print_standard_summary "Update completed successfully." "Update completed with errors." "$STATUS_USE_ASCII"
+}
+
+write_update_state() {
+  local status="success"
+
+  if [[ "${#FAILED_STEPS[@]}" -ne 0 ]]; then
+    status="errors"
+  fi
+
+  mkdir -p "${DOTFILES_UPDATE_STATE_DIR}" || return 1
+
+  cat > "${DOTFILES_UPDATE_STATE_FILE}" <<EOF
+status=${status}
+timestamp=$(date -Iseconds)
+gpu=${GPU_CHOICE}
+audio=${AUDIO_CHOICE}
+network=${NETWORK_CHOICE}
+laptop=${UPDATE_LAPTOP}
+bluetooth=${UPDATE_BLUETOOTH}
+hyprland=${MANAGE_HYPRLAND}
+fonts=${MANAGE_FONTS}
+file_manager=${UPDATE_FILE_MANAGER}
+browser=${UPDATE_BROWSER}
+extra_apps=${UPDATE_EXTRA_APPS}
+ensure_zsh_package=${ENSURE_ZSH_PACKAGE}
+sync_app_configs=${SYNC_APP_CONFIGS}
+sync_shell_dotfiles=${SYNC_SHELL_DOTFILES}
+failed_steps=${#FAILED_STEPS[@]}
+EOF
 }
 
 # =========================
@@ -1053,20 +1306,25 @@ print_summary() {
 # =========================
 
 main() {
+  parse_args "$@"
+
   print_header "DOTFILES UPDATE"
   print_info "Sync source: ${REPO_DIR}"
 
   preflight_checks
-  select_update_mode
 
-  if [[ "$UPDATE_MODE" == "auto" ]]; then
-    auto_detect_selections
-  else
+  if [[ "$UPDATE_MODE" == "interactive" ]]; then
     prompt_user_choices
+  else
+    prepare_live_selections
+    print_info "Running live sync mode with saved selections and auto-detected fallbacks."
   fi
 
   print_selection_summary
-  confirm_update
+
+  if [[ "$UPDATE_MODE" == "interactive" ]]; then
+    confirm_update
+  fi
 
   refresh_pacman || {
     print_error "Failed to refresh pacman databases."
@@ -1111,6 +1369,9 @@ main() {
   deploy_wallpapers
   deploy_user_scripts
   deploy_configs
+
+  write_update_state
+  report_step_result "Wrote update state" "$?"
 
   print_summary
 }

@@ -143,6 +143,25 @@ install_required_aur_package_group() {
   }
 }
 
+install_optional_aur_package_group() {
+  local group_name="$1"
+  shift
+  local packages=("$@")
+  local rc=0
+
+  install_aur_package_group "$group_name" "${packages[@]}" || rc=1
+  verify_packages_installed "$group_name" "${packages[@]}" || {
+    record_fail "Verified ${group_name}"
+    rc=1
+  }
+
+  if [[ "$rc" -ne 0 ]]; then
+    print_warn "${group_name} had issues, but setup can continue without those extras."
+  fi
+
+  return 0
+}
+
 # =========================
 # config deployment
 # =========================
@@ -344,6 +363,29 @@ copy_home_file() {
   render_placeholders_in_file "$target_file"
 }
 
+eww_runtime_available() {
+  command -v eww >/dev/null 2>&1 || any_packages_installed "eww" "eww-wayland"
+}
+
+deploy_eww_config() {
+  local rc=0
+
+  if ! eww_runtime_available; then
+    print_warn "Eww is not installed yet. Copying the config anyway so the bar is ready after a manual install."
+  fi
+
+  if ! package_is_installed "networkmanager" || ! any_packages_installed "${PIPEWIRE_PACKAGES[@]}" || ! command -v nmcli >/dev/null 2>&1 || ! command -v pactl >/dev/null 2>&1; then
+    print_warn "Eww expects NetworkManager and PipeWire tools. Copying the config anyway so you do not lose the setup."
+  fi
+
+  if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
+    return 0
+  fi
+
+  rc=1
+  return "$rc"
+}
+
 deploy_configs() {
   local rc=0
   local copied_any=0
@@ -368,18 +410,10 @@ deploy_configs() {
       print_info "Skipping Hypr config because hyprland is not installed."
     fi
 
-    if package_is_installed "eww"; then
-      if package_is_installed "networkmanager" && any_packages_installed "${PIPEWIRE_PACKAGES[@]}" && command -v nmcli >/dev/null 2>&1 && command -v pactl >/dev/null 2>&1; then
-        if copy_config_dir "$REPO_DIR/configs/eww" "$HOME/.config/eww"; then
-          copied_any=1
-        else
-          rc=1
-        fi
-      else
-        print_warn "Skipping Eww config because it expects NetworkManager and PipeWire to be available."
-      fi
+    if deploy_eww_config; then
+      copied_any=1
     else
-      print_info "Skipping Eww config because eww is not installed."
+      rc=1
     fi
 
     if package_is_installed "rofi"; then
@@ -542,7 +576,7 @@ main() {
   fi
 
   install_required_package_group "HYPRLAND PACKAGES" "${HYPRLAND_PACKAGES[@]}" || abort_setup "Cannot continue without the Hyprland package group."
-  install_required_aur_package_group "HYPRLAND AUR PACKAGES" "${HYPRLAND_AUR_PACKAGES[@]}" || abort_setup "Cannot continue without the Hyprland AUR package group."
+  install_optional_aur_package_group "HYPRLAND AUR PACKAGES" "${HYPRLAND_AUR_PACKAGES[@]}"
   install_required_package_group "FONT PACKAGES" "${FONT_PACKAGES[@]}" || abort_setup "Cannot continue without the font package group."
   install_required_aur_package_group "FONT AUR PACKAGES" "${FONT_AUR_PACKAGES[@]}" || abort_setup "Cannot continue without the font AUR package group."
 

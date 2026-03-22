@@ -105,13 +105,24 @@ When you want to update both packages and dotfiles:
 
 ```bash
 cd ~/dotfiles
-git pull
 ./update.sh
 ```
 
 Run this as your normal user in the installed system.
 
-`update.sh` supports both auto-detect and interactive modes. In auto mode it inspects the current machine and selects sensible defaults based on installed packages, services, and existing shell/config state. It then updates system and AUR packages, ensures the managed package groups are present, and re-syncs the repo's dotfiles into your home directory.
+By default, `update.sh` is now a one-click live sync for machines that already use these dotfiles. It will fast-forward the repo when possible, load saved update selections when available, fall back to install-state plus current machine detection, update system and AUR packages, and then re-sync the managed files into your home directory.
+
+If you want the old choose-everything flow, run:
+
+```bash
+./update.sh --interactive
+```
+
+If you want to skip the automatic repo pull and use the current checkout exactly as-is, run:
+
+```bash
+./update.sh --no-pull
+```
 
 ### 5. Use `uninstall.sh` when you want to remove the managed setup
 
@@ -159,6 +170,7 @@ Unlike `install.sh`, this is not limited to `arch-chroot`, but it should be run 
 - normal user session
 - outside `arch-chroot`
 - `sudo` available
+- if the repo checkout is clean and has an upstream configured, it will try a fast-forward `git pull` before updating
 
 ### `uninstall.sh`
 
@@ -199,6 +211,7 @@ uninstall.sh removal flow for managed packages and files
 - `setup.sh` and `update.sh` back up existing configs and shell files into timestamped backup directories before replacing them
 - `setup.sh` backs up replaced files into `~/.config-backup-<timestamp>`
 - `update.sh` backs up replaced files into `~/.dotfiles-update-backup-<timestamp>`
+- `update.sh` also stores its last selected live-sync state in `~/.local/state/dotfiles/update-state` unless `XDG_STATE_HOME` overrides that base path
 - `uninstall.sh` can also move removed home-side files into a timestamped backup directory instead of deleting them outright
 - `uninstall.sh` stores those backups under the target user's home in `.dotfiles-uninstall-backup-<timestamp>`
 - the scripts print a final passed/failed summary so you can see exactly what completed and what needs attention
@@ -209,15 +222,17 @@ uninstall.sh removal flow for managed packages and files
 
 - `install.sh` uses interactive prompts for hardware and base-system choices such as GPU driver, audio stack, networking, laptop support, and Bluetooth
 - `setup.sh` uses interactive prompts for optional post-boot choices such as browser, file manager, extra apps, config deployment, and shell setup
-- `update.sh` starts by letting you choose between auto-detect mode and a fully interactive mode
-- in auto-detect mode, `update.sh` inspects installed packages and enabled services to choose defaults before showing the selected actions
-- all of the scripts print the selected options before continuing, so you can confirm what is about to happen
+- `update.sh` can run either in its default non-interactive live-sync mode or in a fully interactive mode
+- by default, `update.sh` now runs in a non-interactive live-sync mode that uses saved selections when available and falls back to install-state plus current machine detection
+- `./update.sh --interactive` restores the fully interactive flow
+- all of the scripts print the selected options before package and config changes begin so you can see what is about to happen
 
 ## Conditional Deployment
 
-- `setup.sh` and `update.sh` only sync app configs for applications that are actually installed
+- most app configs are only synced when the matching application is installed
 - some configs are intentionally gated by dependencies; for example, parts of the desktop config expect NetworkManager and PipeWire to be present
-- if a matching app or dependency is missing, the script skips that config and reports why instead of forcing a broken deployment
+- Eww is a special case: the scripts will still sync `configs/eww` so the bar is ready after a later `yay -S eww` install, while still warning if required runtime pieces are missing
+- if a matching app or dependency is missing, the script either skips that config or warns and continues, depending on whether the config is still useful on disk without the runtime package
 
 ## Customization Entry Points
 
